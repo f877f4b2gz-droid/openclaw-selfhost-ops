@@ -3,7 +3,7 @@
 <p align="left">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/platform-Linux-blue.svg" alt="Platform: Linux">
-  <img src="https://img.shields.io/badge/status-draft%20v0-lightgrey.svg" alt="Status: draft v0">
+  <img src="https://img.shields.io/badge/status-v1.0-blue.svg" alt="Status: v1.0">
 </p>
 
 [简体中文](README.md) ｜ **English**
@@ -92,12 +92,19 @@ openclaw-selfhost-ops/
 ├── docs/                   9 documents (8 specs + inspection guide)
 ├── scripts/
 │   ├── ops.conf.example    Path & threshold template (install to /etc/openclaw-ops/ops.conf)
-│   ├── asset-audit.sh      Asset health check (5+1 classes; alert on gaps/over-limit)
-│   ├── log-rotate.sh       Log rotation / session-residue cleanup / backup slimming
-│   └── core-backup.sh      Full core snapshot (retention configurable)
+│   ├── asset-audit.sh      Asset health check (5+1 classes + projects + self-backup)
+│   ├── log-rotate.sh       Service-log rotation / session residue / backup slimming / media cleanup
+│   ├── core-backup.sh      Three-tier backup: core rollback tarball / daily snapshot / weekly encrypted bundle
+│   ├── backup-sweep.sh     Whole-disk backup dedup (keep newest N per origin)
+│   ├── cache-trace-trim.sh Cache-trace slimming (by age + hard size cap)
+│   ├── bak-clean.sh        `.bak` cleanup (keep newest N per target)
+│   └── trash-clean.sh      Trash expiry cleanup (the "trash > rm" trash)
 └── cron/
     └── ops.cron.example    Example crontab
 ```
+
+> Destructive scripts all support `--dry-run` to preview first. `backup-sweep.sh` goes further —
+> it **previews by default**; deleting requires an explicit `--apply`.
 
 ## 6. Document index
 
@@ -119,7 +126,7 @@ openclaw-selfhost-ops/
 
 1. **Prepare config**: `sudo install -Dm644 scripts/ops.conf.example /etc/openclaw-ops/ops.conf`, then edit paths and thresholds for your host (scripts read here by default). **Without root**, place it anywhere and point `OPS_CONF=/path/ops.conf` at it.
 2. **Run a check**: `chmod +x scripts/*.sh` and run `./scripts/asset-audit.sh`; see the output (report written to `$WORKSPACE/logs/asset-audit.log`).
-3. **Schedule it**: following `cron/ops.cron.example`, add the three jobs to `<crontab>` (for OpenClaw users, usually `/etc/cron.d/`).
+3. **Schedule it**: following `cron/ops.cron.example`, add the cleanup/backup jobs to `<crontab>` (for OpenClaw users, usually `/etc/cron.d/`). The example lists all seven with suggested times.
 4. **Set up alerts**: point `ALERT_CMD` at your notification script (IM / email / webhook — anything). Leave it empty to log only.
 5. **(Optional) Verify alerts work**: once `ALERT_CMD` is set, run `asset-audit.sh` and confirm you get a test push; without it the tool still works — anomalies just go to the log.
 

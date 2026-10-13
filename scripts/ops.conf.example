@@ -1,44 +1,134 @@
 # ============================================================
-# 自托管运维治理 · 配置示例
-# 用法：复制为 ops.conf 并填入本机实际值。
-#   默认读取 /etc/openclaw-ops/ops.conf，
-#   也可用环境变量指定：OPS_CONF=/path/to/ops.conf ./asset-audit.sh
-# 注意：本文件含真实路径/凭据的请勿提交公开仓库（见 docs/规范-脱敏.md）。
+# 自托管运维治理 · 配置模板（ops.conf）
+#
+# 用法：
+#   sudo install -Dm644 scripts/ops.conf.example /etc/openclaw-ops/ops.conf
+#   然后按本机实际改下面的值。
+#   无 root 时放到任意位置，用环境变量指定：
+#     OPS_CONF=/path/to/ops.conf ./scripts/asset-audit.sh
+#
+# 约定：脚本只读本文件；本文件**绝不入库**（见 docs/规范-脱敏.md）。
+# 仓库里只有 *.example；真实 ops.conf 已被 .gitignore 忽略。
 # ============================================================
 
 # ---------- 路径 ----------
-# 工作区：存放 docs/ memory/ backup/ skills/ 等（文档与手工备份的单一真相源）
+# 工作区根：docs/ memory/ backup/ skills/ scripts/ logs/ 所在
 WORKSPACE="/path/to/workspace"
 
-# OpenClaw 数据目录：含 openclaw.json、logs/、agents/ 会话
+# 助手数据目录：含 openclaw.json、logs/、agents/ 会话
 OPENCLAW_HOME="$HOME/.openclaw"
 
-# 脚本自动备份根目录（core 快照等放这里）
-BACKUP_ROOT="/path/to/backups"
+# 脚本自动备份根（core 快照等）；留空 = $WORKSPACE/backup
+BACKUP_ROOT=""
 
-# 回收站：过期文件先移这里，不直接 rm
+# 回收站：超期文件从这里清理，不直接 rm
 TRASH_DIR="/path/to/trash"
 
-# 告警命令：接管传入的一段文本；留空 = 不推送（只写日志）
-# 例：ALERT_CMD="/path/to/notify.sh"   （你的推送脚本：IM / 邮件 / Webhook 均可）
+# 日志目录（各脚本的自身日志落这里，Logrotate 也扫这里）
+LOG_DIR="/var/log"
+
+# ---------- 体检范围（asset-audit.sh）----------
+# 自建脚本目录（体检"脚本是否登记进台账"）
+SCRIPTS_DIR="/usr/local/bin"
+
+# 脚本台账文档：一个脚本一行，否则搜不到（体例里的"检索键"）
+# 留空 = 跳过这一节体检
+SCRIPTS_LEDGER_DOC="$WORKSPACE/docs/系统资产台账.md"
+
+# 文档索引（体检"docs/*.md 是否都登记了"）；留空 = 跳过该检查
+DOCS_LEDGER="$WORKSPACE/docs/README.md"
+
+# 技能目录与项目区目录
+SKILLS_DIR="$WORKSPACE/skills"
+PROJECTS_DIR="$WORKSPACE/projects"
+
+# 助手运行日志目录（openclaw-*.log 归档用）；留空 = 跳过该项
+OCLOG_DIR="/tmp/openclaw"
+
+# 系统盘清理脚本路径（可选；留空 = log-rotate 跳过这一节）
+SYSDISK_CLEAN=""
+
+# ---------- 告警 ----------
+# 接管一段文本的推送命令（IM / 邮件 / Webhook 均可）；留空 = 只写日志不推送
 ALERT_CMD=""
 
-# ---------- 阈值（示例默认：来自实战，按需调整）----------
-
-# 日志
-LOG_SERVICE_MAX=$((50 * 1024 * 1024))   # 单个服务日志超此字节 → 截断
-LOG_SERVICE_KEEP_LINES=1000             # 截断后保留行数
-LOG_SELF_MAX=$((1024 * 1024))           # 巡检日志自身上限
-LOG_SELF_KEEP_LINES=1000
-CT_LOG_MAX=$((300 * 1024 * 1024))       # cache-trace 超此字节 → 原地重写
-CT_KEEP_RATIO=5                         # 重写后保留最近 1/N 行
-SESS_KEEP_DAYS=7                        # 会话残留（trajectory/bak/checkpoint）保留天数
+# ---------- 日志与阈值 ----------
+LOG_SELF_MAX=$((1024 * 1024))      # 巡检日志自身上限（字节）
+LOG_SELF_KEEP_LINES=1000           # 超限后保留行数
+LOG_SERVICE_MAX=$((50 * 1024 * 1024))  # 单个服务日志超此字节 → 截断
+LOG_SERVICE_KEEP_LINES=1000
+WS_BAK_KEEP=1                      # 工作区手工备份 *.bak.<ts> 每类保留份数
 
 # 服务日志轮转：格式 "路径:保留天数"，空格分隔多项
-ROTATE_LOGS="/var/log/app-a.log:14 /var/log/app-b.log:7"
+ROTATE_LOGS=""
 
-# 备份
-CORE_BACKUP_KEEP=30                     # core 快照保留份数（超则删最旧）
-WS_BACKUP_MAX_MB=512                    # 手工备份目录软上限（MB）
-OC_BAK_KEEP=15                          # 主配置 .bak 保留份数上限（超过告警）
-MEMORY_KEEP_DAYS=30                     # 日记归档天数
+# ---------- cache-trace 缓存轨迹 ----------
+# ⚠️ CT_FILE 必填：本脚本会**原地重写**目标文件，不给默认值。
+# 保留最近 N 天 + 全局大小硬上限（超上限只留尾部）
+CT_FILE="$OPENCLAW_HOME/logs/cache-trace.jsonl"
+CT_KEEP_DAYS=7
+CT_CAP_BYTES=$((4 * 1024 * 1024 * 1024))
+
+# ---------- 会话残留 ----------
+SESS_KEEP_DAYS=7                   # trajectory / bak / checkpoint 保留天数
+
+# ---------- 媒体与临时文件清理 ----------
+# 助手媒体目录（语音/图片/视频），留空 = 跳过该项
+MEDIA_DIR="$OPENCLAW_HOME/media"
+MEDIA_VOICE_MIN=60                 # 语音文件保留分钟数（用完即删语义）
+MEDIA_IMG_DAYS=7                   # 图片/视频保留天数
+TMP_KEEP_DAYS=7                    # 工作区 tmp_*.py / *_build.log 保留天数
+
+# ---------- .bak 清理 ----------
+# ⚠️ 必填：bak-clean.sh 会删文件，所以删除范围不给默认值 —— 不配就拒绝运行。
+BAK_ROOTS="/etc /usr/local/bin /opt"   # 扫这些根下的 *.bak*（按你的实际部署改）
+BAK_KEEP_RECENT_H=6                    # 最近 N 小时内产生的不动
+BAK_KEEP_PER_TARGET=1                  # 每个目标只留最新 N 份
+
+# ---------- 备份 ----------
+CORE_BACKUP_KEEP=30                # core 快照保留份数
+WS_BACKUP_MAX_MB=512               # 手工备份目录软上限（MB）
+OC_BAK_KEEP=15                     # 主配置 .bak 保留份数上限（超过告警）
+MEMORY_KEEP_DAYS=30                # 日记归档天数
+
+# 备份去重（backup-sweep.sh）：扫描根 + 每组保留份数
+SWEEP_ROOTS="/etc /root /home /opt /srv"
+SWEEP_KEEP=3                       # 每个同源保留最新 N 个（0=不限）
+SWEEP_MAXAGE=0                     # 超过 N 天删除（0=不按龄）
+SWEEP_EXCLUDE=""                   # 额外跳过的目录名，空格分隔（媒体/依赖等）
+
+# 备份要纳入的**系统级**路径（core-backup.sh；工作区与助手目录会自动纳入）
+CORE_BACKUP_SRC="/usr/local/bin /etc/cron.d"
+
+# 助手运行日志归档节奏（log-rotate.sh 的 clean_logs）
+OCLOG_ARCHIVE_DAYS=14              # openclaw-*.log.gz 归档保留天数
+OCLOG_BUSY_HOURS=24                # 近 N 小时有活动日志视为"忙"→ 每天清理；否则隔约 3 天
+
+# ---------- 自备份（可选：异地/云）----------
+# 盘B 之类的第二份存储挂载点；留空 = 跳过每日快照
+SELF_BACKUP_ROOT=""
+# 云同步落点目录（网盘挂载点）；留空 = 跳过云上传
+CLOUD_DEST=""
+# 加密口令文件（0600，绝不入库）；留空 = 不做加密包
+ENC_PASSFILE=""
+SELF_BACKUP_KEEP=30                # 每日快照保留份数
+WEEKLY_KEEP=8                      # 每周加密包保留份数
+
+# 回收站条目保留天数（trash-clean.sh）；留空 = 沿用 MEMORY_KEEP_DAYS
+TRASH_KEEP_DAYS=30
+
+# ---------- 跨脚本的环境变量（可不写，用默认值）----------
+# 这三个用环境变量传，不是 ops.conf 里的常规项，列在这里备查：
+#
+#   OPS_CONF       配置文件位置（默认 /etc/openclaw-ops/ops.conf）
+#                  例：OPS_CONF=./my.conf ./scripts/asset-audit.sh
+#
+#   STAMP_FILE     日志归档的"上次清理时间"戳（默认 /var/lib/log-rotate.last-logclean）
+#                  放 /var/lib 是为了重启不丢；用 /tmp 会每次重启都重跑
+#
+#   SWEEP_LOG      备份去重的日志文件（默认 $WORKSPACE/logs/backup-sweep.log）
+#                  体检会检查它是否存在 —— 没有日志就等于轮转没在跑
+SWEEP_LOG="$WORKSPACE/logs/backup-sweep.log"
+
+# ---------- 项目区 ----------
+PROJECT_STALE_DAYS=14              # 项目 STATUS 超期天数
