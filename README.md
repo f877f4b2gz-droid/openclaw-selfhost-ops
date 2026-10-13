@@ -1,4 +1,6 @@
-# OpenClaw 自托管运维治理
+# OpenClaw 自托管运维治理（中文版）
+
+# OpenClaw Self-Host Ops Governance
 
 <p align="left">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
@@ -160,4 +162,4 @@ MIT，见 [LICENSE](LICENSE)。
 
 ---
 
-
+**状态**：草案 v0（内容已定稿，待发布）。已完成：规范定稿（含上下文与缓存）、脚本参数化 + 真机验证、GitHub 查重、安全审计、FAQ。待办：发布。
