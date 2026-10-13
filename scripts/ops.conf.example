@@ -1,0 +1,44 @@
+# ============================================================
+# 自托管运维治理 · 配置示例
+# 用法：复制为 ops.conf 并填入本机实际值。
+#   默认读取 /etc/openclaw-ops/ops.conf，
+#   也可用环境变量指定：OPS_CONF=/path/to/ops.conf ./asset-audit.sh
+# 注意：本文件含真实路径/凭据的请勿提交公开仓库（见 docs/规范-脱敏.md）。
+# ============================================================
+
+# ---------- 路径 ----------
+# 工作区：存放 docs/ memory/ backup/ skills/ 等（文档与手工备份的单一真相源）
+WORKSPACE="/path/to/workspace"
+
+# OpenClaw 数据目录：含 openclaw.json、logs/、agents/ 会话
+OPENCLAW_HOME="$HOME/.openclaw"
+
+# 脚本自动备份根目录（core 快照等放这里）
+BACKUP_ROOT="/path/to/backups"
+
+# 回收站：过期文件先移这里，不直接 rm
+TRASH_DIR="/path/to/trash"
+
+# 告警命令：接管传入的一段文本；留空 = 不推送（只写日志）
+# 例：ALERT_CMD="/path/to/notify.sh"   （你的推送脚本：IM / 邮件 / Webhook 均可）
+ALERT_CMD=""
+
+# ---------- 阈值（示例默认：来自实战，按需调整）----------
+
+# 日志
+LOG_SERVICE_MAX=$((50 * 1024 * 1024))   # 单个服务日志超此字节 → 截断
+LOG_SERVICE_KEEP_LINES=1000             # 截断后保留行数
+LOG_SELF_MAX=$((1024 * 1024))           # 巡检日志自身上限
+LOG_SELF_KEEP_LINES=1000
+CT_LOG_MAX=$((300 * 1024 * 1024))       # cache-trace 超此字节 → 原地重写
+CT_KEEP_RATIO=5                         # 重写后保留最近 1/N 行
+SESS_KEEP_DAYS=7                        # 会话残留（trajectory/bak/checkpoint）保留天数
+
+# 服务日志轮转：格式 "路径:保留天数"，空格分隔多项
+ROTATE_LOGS="/var/log/app-a.log:14 /var/log/app-b.log:7"
+
+# 备份
+CORE_BACKUP_KEEP=30                     # core 快照保留份数（超则删最旧）
+WS_BACKUP_MAX_MB=512                    # 手工备份目录软上限（MB）
+OC_BAK_KEEP=15                          # 主配置 .bak 保留份数上限（超过告警）
+MEMORY_KEEP_DAYS=30                     # 日记归档天数
