@@ -161,7 +161,3 @@ Every change is `.bak`'d first, and the ledger records the **restore command**; 
 ## 10. License
 
 MIT, see [LICENSE](LICENSE).
-
----
-
-**Status**: draft v0 (content finalized, pending release). Done: specs finalized (incl. context & cache), scripts parameterized + verified on a real host, GitHub duplication check, security audit, FAQ. TODO: release.
