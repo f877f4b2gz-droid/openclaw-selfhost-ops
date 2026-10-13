@@ -13,3 +13,6 @@ PATH=/usr/local/bin:/usr/bin:/bin
 
 # 每周日 05:00 资产体检（异常才推送；正常保持静默）
 0 5 * * 0    root  /path/to/openclaw-selfhost-ops/scripts/asset-audit.sh
+
+# 每日 05:30  全盘备份去重（同源留最新 N 份）
+30 5 * * *   root  /path/to/openclaw-selfhost-ops/scripts/backup-sweep.sh  >> /var/log/ops-backup-sweep.log 2>&1
