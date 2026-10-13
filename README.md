@@ -94,7 +94,8 @@ openclaw-selfhost-ops/
 │   ├── ops.conf.example    路径与阈值配置模板（install 到 /etc/openclaw-ops/ops.conf）
 │   ├── asset-audit.sh      资产体检（5+1 类，漏登记/超限告警）
 │   ├── log-rotate.sh       日志轮转 / 会话残留清理 / 备份瘦身
-│   └── core-backup.sh      core 全量快照（保留份数可配）
+│   ├── core-backup.sh      core 全量快照（保留份数可配）
+│   └── backup-sweep.sh     全盘备份去重（同源留最新 N 份）
 └── cron/
     └── ops.cron.example    示例定时表
 ```
