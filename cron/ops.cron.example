@@ -1,0 +1,15 @@
+# 自托管运维治理 · 示例定时表
+# 放到 <定时表>（OpenClaw 用户通常是 /etc/cron.d/），文件名如 openclaw-ops。
+# 把 /path/to/ 换成实际仓库路径；阈值在 ops.conf 里调。
+
+SHELL=/bin/bash
+PATH=/usr/local/bin:/usr/bin:/bin
+
+# 每日 02:30  core 全量快照
+30 2 * * *   root  /path/to/openclaw-selfhost-ops/scripts/core-backup.sh  >> /var/log/ops-core-backup.log 2>&1
+
+# 每日 04:10  日志轮转 / 会话残留清理 / 备份瘦身
+10 4 * * *   root  /path/to/openclaw-selfhost-ops/scripts/log-rotate.sh    >> /var/log/ops-rotate.log 2>&1
+
+# 每周日 05:00 资产体检（异常才推送；正常保持静默）
+0 5 * * 0    root  /path/to/openclaw-selfhost-ops/scripts/asset-audit.sh

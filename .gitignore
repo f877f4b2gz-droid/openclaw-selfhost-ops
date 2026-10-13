@@ -1,0 +1,26 @@
+# 真实配置与密钥 —— 绝不入库（见 docs/规范-脱敏.md）
+
+# 本机真实配置（由 ops.conf.example 复制而来）
+ops.conf
+
+# 环境变量 / 密钥 / 证书
+*.env
+*.env.*
+*secret*
+*token*
+*password*
+*credential*
+*.key
+*.pem
+*.p12
+id_rsa*
+*.kdbx
+
+# 运行时产物与备份
+*.log
+logs/
+backups/
+*.bak
+*.bak.*
+*.tmp
+*.tar.gz
