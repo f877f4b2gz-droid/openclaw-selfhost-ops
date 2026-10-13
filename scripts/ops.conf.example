@@ -42,3 +42,9 @@ CORE_BACKUP_KEEP=30                     # core 快照保留份数（超则删最
 WS_BACKUP_MAX_MB=512                    # 手工备份目录软上限（MB）
 OC_BAK_KEEP=15                          # 主配置 .bak 保留份数上限（超过告警）
 MEMORY_KEEP_DAYS=30                     # 日记归档天数
+
+# 备份去重（backup-sweep.sh）：全盘扫描，按“去日期文件名”判同源，留最新 N 份
+SWEEP_ROOTS="/etc /home /opt /srv"      # 扫描根（空格分隔；-xdev 不跨网络盘）
+SWEEP_KEEP=3                            # 每个同源保留最新 N 个（0=不限）
+SWEEP_MAXAGE=0                          # 超过 N 天删除（0=不按龄）
+# SWEEP_EXCLUDE="media movie Photos"      # 额外跳过的目录名（媒体等大目录）
