@@ -5,7 +5,7 @@
 <p align="left">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/platform-Linux-blue.svg" alt="Platform: Linux">
-  <img src="https://img.shields.io/badge/status-draft%20v0-lightgrey.svg" alt="Status: draft v0">
+  <img src="https://img.shields.io/badge/status-v1.0-blue.svg" alt="Status: v1.0">
 </p>
 
 **简体中文** ｜ [English](README.en.md)
@@ -92,13 +92,18 @@ openclaw-selfhost-ops/
 ├── docs/                   9 份文档（8 规范 + 巡检说明，见下表）
 ├── scripts/
 │   ├── ops.conf.example    路径与阈值配置模板（install 到 /etc/openclaw-ops/ops.conf）
-│   ├── asset-audit.sh      资产体检（5+1 类，漏登记/超限告警）
-│   ├── log-rotate.sh       日志轮转 / 会话残留清理 / 备份瘦身
-│   ├── core-backup.sh      core 全量快照（保留份数可配）
-│   └── backup-sweep.sh     全盘备份去重（同源留最新 N 份）
+│   ├── asset-audit.sh      资产体检（5+1 类 + 项目 + 自备份）
+│   ├── log-rotate.sh       服务日志轮转 / 会话残留 / 手工备份瘦身 / 附件与媒体清理
+│   ├── core-backup.sh      核心备份三级：core 回滚包 / 每日快照 / 每周加密包（可上云）
+│   ├── backup-sweep.sh     全盘备份去重（同源留最新 N 份）
+│   ├── cache-trace-trim.sh 缓存轨迹瘦身（按天数 + 大小硬上限）
+│   ├── bak-clean.sh        .bak 清理（每个目标只留最新 N 份）
+│   └── trash-clean.sh      回收站超期清理（trash > rm 的那个 trash）
 └── cron/
     └── ops.cron.example    示例定时表
 ```
+
+> 破坏性脚本一律支持 `--dry-run` 先预览；`backup-sweep.sh` 更进一步 —— **默认就是预览**，要真删得显式加 `--apply`。
 
 ## 六、文档清单
 
@@ -118,7 +123,7 @@ openclaw-selfhost-ops/
 
 1. **准备配置**：`sudo install -Dm644 scripts/ops.conf.example /etc/openclaw-ops/ops.conf`，再按本机改路径与阈值（脚本默认读这里）。**无 root** 时放进任意目录，用 `OPS_CONF=/路径/ops.conf` 指定即可。
 2. **跑一次体检**：`chmod +x scripts/*.sh`，执行 `./scripts/asset-audit.sh`，看输出（报告写在 `$WORKSPACE/logs/asset-audit.log`）。
-3. **挂定时**：参照 `cron/ops.cron.example`，把三条任务放进 `<定时表>`（OpenClaw 用户通常是 `/etc/cron.d/`）。
+3. **挂定时**：参照 `cron/ops.cron.example`，把清理与备份任务放进 `<定时表>`（OpenClaw 用户通常是 `/etc/cron.d/`）。七条任务的建议时间与顺序见示例文件。
 4. **配告警**：把 `ALERT_CMD` 指到你的推送脚本（IM / 邮件 / Webhook 均可）；留空则只写日志、不推送。
 5. **（可选）确认告警推送正常**：`ALERT_CMD` 配好后跑一次 `asset-audit.sh`，能收到测试推送即可；不配也能用，异常只写日志。
 
