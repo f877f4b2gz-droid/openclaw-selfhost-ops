@@ -1,18 +1,37 @@
 # 自托管运维治理 · 示例定时表
 # 放到 <定时表>（OpenClaw 用户通常是 /etc/cron.d/），文件名如 openclaw-ops。
 # 把 /path/to/ 换成实际仓库路径；阈值在 ops.conf 里调。
+#
+# 时间只是示例。经验：清理类任务错峰到凌晨不同时刻（别挤在同一分钟），
+# 互相不抢 IO，出问题时看日志也容易分辨是谁干的。
 
 SHELL=/bin/bash
 PATH=/usr/local/bin:/usr/bin:/bin
 
-# 每日 02:30  core 全量快照
-30 2 * * *   root  /path/to/openclaw-selfhost-ops/scripts/core-backup.sh  >> /var/log/ops-core-backup.log 2>&1
+# 每日 03:15  .bak 清理（每个目标只留最新 N 份）
+15 3 * * *   root  /path/to/openclaw-selfhost-ops/scripts/bak-clean.sh             >> /var/log/bak-clean.log 2>&1
 
-# 每日 04:10  日志轮转 / 会话残留清理 / 备份瘦身
-10 4 * * *   root  /path/to/openclaw-selfhost-ops/scripts/log-rotate.sh    >> /var/log/ops-rotate.log 2>&1
+# 每日 03:35  缓存轨迹瘦身（按天数 + 大小硬上限）
+35 3 * * *   root  /path/to/openclaw-selfhost-ops/scripts/cache-trace-trim.sh       >> /var/log/cache-trace-trim.log 2>&1
 
-# 每周日 05:00 资产体检（异常才推送；正常保持静默）
-0 5 * * 0    root  /path/to/openclaw-selfhost-ops/scripts/asset-audit.sh
+# 每日 03:45  回收站超期清理（先 trash 后删，留后悔窗口）
+45 3 * * *   root  /path/to/openclaw-selfhost-ops/scripts/trash-clean.sh
 
-# 每日 05:30  全盘备份去重（同源留最新 N 份）
-30 5 * * *   root  /path/to/openclaw-selfhost-ops/scripts/backup-sweep.sh  >> /var/log/ops-backup-sweep.log 2>&1
+# 每日 04:10  日志轮转 / 会话残留清理 / 手工备份瘦身 / 附件清理
+10 4 * * *   root  /path/to/openclaw-selfhost-ops/scripts/log-rotate.sh             >> /var/log/log-rotate.log 2>&1
+#            高频补跑（可选）：附件/媒体项每 30 分钟一次，让"语音转文字后即删"更快
+*/30 * * * * root  /path/to/openclaw-selfhost-ops/scripts/log-rotate.sh --media-only >> /var/log/log-rotate.log 2>&1
+
+# 每日 04:30  core 全量快照（配置 / 脚本 / 定时表 / 工作区）
+30 4 * * *   root  /path/to/openclaw-selfhost-ops/scripts/core-backup.sh
+
+# 每日 05:30  全盘备份去重（默认只预览！要真删必须显式 --apply）
+30 5 * * *   root  /path/to/openclaw-selfhost-ops/scripts/backup-sweep.sh --apply   >> /var/log/backup-sweep.log 2>&1
+
+# 每周日 06:00 资产体检（正常静默，异常才推送；慢任务放低峰）
+0 6 * * 0    root  /path/to/openclaw-selfhost-ops/scripts/asset-audit.sh
+
+# 注意：
+#   1) backup-sweep.sh 不带 --apply 时只预览，不会删任何东西。
+#   2) 清理类任务的日志重定向别省 —— 体检脚本会检查"清理任务有没有日志"；
+#      没日志的清理一旦出错就无从追溯，会直接报异常。
