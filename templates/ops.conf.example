@@ -1,0 +1,26 @@
+# openclaw-selfhost-ops v2.0 - 配置示例
+# 用途：双机运维参数集中配置（NAS/PC 角色、路径、回收与闭环阈值）
+# 用法：复制为 ops.conf，按实际环境填写后 source 或由脚本读取
+# 日期：2026-10-17（v2.0 发布整理）
+# 维护：八戒(PC) 执行 / 悟空(NAS) 编排
+
+# ---- 双机信息 ----
+NAS_HOST=<NAS_IP>              # NAS 内网地址，脱敏占位
+PC_ROLE=executor               # 八戒(PC)=执行端
+NAS_ROLE=orchestrator          # 悟空(NAS)=编排与事实源
+
+# ---- 路径 ----
+OPENCLAW_HOME=<OPENCLAW_PATH>  # OpenClaw 安装根目录
+SCRATCH_DIR=$OPENCLAW_HOME/workspace/tmp   # 草稿区，供 scratch-sweep 回收
+DOCS_DIR=$OPENCLAW_HOME/workspace/docs     # 文档事实源
+RULES_DOC=$DOCS_DIR/规则库.md              # 规则权威
+
+# ---- 垃圾回收（scratch-sweep.sh） ----
+SCRATCH_TTL_DAYS=14            # 草稿存活期，超期即回收
+TRASH_MODE=trash               # 删除走回收，禁 rm
+
+# ---- 复用分析（ref-count.sh） ----
+REF_MIN_COUNT=2                # 引用次数达标才建议沉淀为资产
+
+# ---- 反馈闭环（exp-scan.sh） ----
+QUEUE_FILE=$OPENCLAW_HOME/workspace/queue/exp-queue.md
