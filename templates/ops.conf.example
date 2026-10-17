@@ -2,7 +2,7 @@
 # 自托管运维治理 · 配置模板（ops.conf）
 #
 # 用法：
-#   sudo install -Dm644 scripts/ops.conf.example /etc/openclaw-ops/ops.conf
+#   sudo install -Dm644 templates/ops.conf.example /etc/openclaw-ops/ops.conf
 #   然后按本机实际改下面的值。
 #   无 root 时放到任意位置，用环境变量指定：
 #     OPS_CONF=/path/to/ops.conf ./scripts/asset-audit.sh
@@ -132,3 +132,20 @@ SWEEP_LOG="$WORKSPACE/logs/backup-sweep.log"
 
 # ---------- 项目区 ----------
 PROJECT_STALE_DAYS=14              # 项目 STATUS 超期天数
+
+# ---------- v2.0 治理脚本（scratch-sweep / ref-count / exp-scan）----------
+# 三脚本经 lib/ops_lib.sh 加载本文件；WORKSPACE / TRASH_DIR 复用上方定义。
+
+# 状态目录：seen.tsv / rounds / launch_date / last_run 落这里。
+# 默认 /var/lib/<脚本名>（需 root 写权限）；非 root 建议指到可写目录：
+#WK_STATE_DIR="$HOME/.local/state/openclaw-ops"
+
+# 私有辅助库路径（可选）。缺失时脚本自动降级（日志/通知回退 stderr），不中断：
+#OPS_WK_LIB=/usr/local/lib/wk.sh
+
+# 草稿区清理阈值（scratch-sweep.sh）：
+SCRATCH_SURVIVE_DAYS=30            # 存活期：自进入 scratch/ 起算的天数
+SCRATCH_ZERO_ROUNDS=2              # 连续 N 轮被引=0 才移入回收站
+
+# 经验队列（exp-scan.sh）：上限 50 条、待处理超 30 天标过期——逻辑内置。
+# 关闭通知推送：运行前设环境变量 EXP_NO_NOTIFY=1。
