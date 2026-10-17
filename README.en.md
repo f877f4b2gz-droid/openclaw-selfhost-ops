@@ -104,16 +104,22 @@ openclaw-selfhost-ops/
 ├── README.md               Chinese README
 ├── README.en.md            English README (this file)
 ├── LICENSE
-├── docs/                   9 documents (8 specs + inspection guide)
+├── docs/                   governance specs
+├── lib/
+│   └── ops_lib.sh          Shared library: config load, dependency fallback, path checks
 ├── scripts/
-│   ├── ops.conf.example    Path & threshold template (install to /etc/openclaw-ops/ops.conf)
 │   ├── asset-audit.sh      Asset health check (5+1 classes + projects + self-backup)
 │   ├── log-rotate.sh       Service-log rotation / session residue / backup slimming / media cleanup
 │   ├── core-backup.sh      Three-tier backup: core rollback tarball / daily snapshot / weekly encrypted bundle
 │   ├── backup-sweep.sh     Whole-disk backup dedup (keep newest N per origin)
 │   ├── cache-trace-trim.sh Cache-trace slimming (by age + hard size cap)
 │   ├── bak-clean.sh        `.bak` cleanup (keep newest N per target)
-│   └── trash-clean.sh      Trash expiry cleanup (the "trash > rm" trash)
+│   ├── trash-clean.sh      Trash expiry cleanup (the "trash > rm" trash)
+│   ├── scratch-sweep.sh    v2.0: scratch-area survival review & GC
+│   ├── ref-count.sh        v2.0: static reference counting for tiered assessment
+│   └── exp-scan.sh         v2.0: experience-base scan with bounded feedback queue
+├── templates/
+│   └── ops.conf.example    Path & threshold template (install to /etc/openclaw-ops/ops.conf)
 └── cron/
     └── ops.cron.example    Example crontab
 ```
@@ -139,7 +145,7 @@ openclaw-selfhost-ops/
 
 ## 7. Quick start
 
-1. **Prepare config**: `sudo install -Dm644 scripts/ops.conf.example /etc/openclaw-ops/ops.conf`, then edit paths and thresholds for your host (scripts read here by default). **Without root**, place it anywhere and point `OPS_CONF=/path/ops.conf` at it.
+1. **Prepare config**: `sudo install -Dm644 templates/ops.conf.example /etc/openclaw-ops/ops.conf`, then edit paths and thresholds for your host (scripts read here by default). **Without root**, place it anywhere and point `OPS_CONF=/path/ops.conf` at it.
 2. **Run a check**: `chmod +x scripts/*.sh` and run `./scripts/asset-audit.sh`; see the output (report written to `$WORKSPACE/logs/asset-audit.log`).
 3. **Schedule it**: following `cron/ops.cron.example`, add the cleanup/backup jobs to `<crontab>` (for OpenClaw users, usually `/etc/cron.d/`). The example lists all seven with suggested times.
 4. **Set up alerts**: point `ALERT_CMD` at your notification script (IM / email / webhook — anything). Leave it empty to log only.

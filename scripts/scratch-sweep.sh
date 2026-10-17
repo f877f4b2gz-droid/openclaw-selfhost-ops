@@ -1,30 +1,31 @@
 #!/bin/bash
-# scratch-sweep.sh — scratch/ 兜底清理（P4）
-# 用途：对 workspace/scratch/ 保存活期巡检——新进文件≥30天且被引=0、且连续两轮=0 → 移 trash；
-#       存量（机制上线日已在的文件）豁免，只出清单人工审；首轮只出清单不删。
+# ------------------------------------------------------------
+# scratch-sweep.sh — 草稿区兜底清理
+#
+# 用途：对 scratch/ 做存活期巡检。新进文件存活 ≥30 天、被引次数 =0
+#       且连续两轮 =0 → 移入 trash；机制上线前已存在的存量文件豁免，
+#       仅输出清单交人工复核；首轮扫描只出清单、不删除。
+#
 # 用法：scratch-sweep.sh [--dry-run]
-# 状态：/var/lib/scratch-sweep/（seen.tsv / rounds / launch_date）
-# 日志：/var/log/scratch-sweep.log
-# 开源包：v2.0 发布整理 2026-10-17（源文件创建日期不详）
-# 规则：docs/规则库.md @存活期@scratch@被引次数；scratch/README.md
+#   --dry-run  只列出到期候选，不移动文件、不更新状态判定
+#
+# 配置（ops.conf，见 templates/ops.conf.example）：
+#   WORKSPACE 草稿区所在的工作区根；TRASH_DIR 回收站；WK_STATE_DIR 状态目录
+# 状态：${WK_STATE_DIR:-/var/lib/scratch-sweep}/（seen.tsv / rounds / launch_date）
+# ------------------------------------------------------------
 set -u
-if [ -f /usr/local/lib/wk.sh ]; then source /usr/local/lib/wk.sh; else echo "WARN: 未找到 /usr/local/lib/wk.sh，部分功能将受限" >&2; fi
-# 降级兜底：私有库缺失时提供最小实现，保证主流程不中断
-if ! declare -F wk_log >/dev/null 2>&1; then
-  wk_log() { printf '[%s] %s\n' "$(date +%F\ %T)" "$*" >&2; }
-  wk_notify() { printf '[notify] %s\n' "$*" >&2; }
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/ops_lib.sh"
 WK_NAME=scratch-sweep
 
-WS="${WUKONG_WS:-<OPENCLAW_PATH>}"
+ops_require_ws
 SCRATCH="$WS/scratch"
 STATE_DIR="${WK_STATE_DIR:-/var/lib/scratch-sweep}"
 SEEN="$STATE_DIR/seen.tsv"
 ROUNDS_F="$STATE_DIR/rounds"
 LAUNCH_F="$STATE_DIR/launch_date"
-TRASH="${WK_TRASH:-$WS/trash}"
-SURVIVE_DAYS=30
-ZERO_ROUNDS_TO_CLEAR=2
+TRASH="${TRASH_DIR:-${WK_TRASH:-$WS/trash}}"
+SURVIVE_DAYS="${SCRATCH_SURVIVE_DAYS:-30}"
+ZERO_ROUNDS_TO_CLEAR="${SCRATCH_ZERO_ROUNDS:-2}"
 DRY=0; [ "${1:-}" = "--dry-run" ] && DRY=1
 
 mkdir -p "$STATE_DIR" 2>/dev/null || { wk_log "无法建状态目录 $STATE_DIR"; exit 1; }
@@ -90,5 +91,5 @@ if [ "$cand" -gt 0 ]; then
   wk_notify info scratch-sweep "$msg"
   echo "$msg"
 else
-  echo "scratch/ 无到期候选（存量豁免=$exempt 保留=$kept 轮次=$rounds${DRY:+ dry-run}）"
+  echo "scratch/ 无到期候选（存量豁免=$exempt 保留=$kept 轮次=$rounds）"
 fi

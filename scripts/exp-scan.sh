@@ -1,29 +1,32 @@
 #!/bin/bash
-# exp-scan.sh — 经验库反馈闭环（P5）
-# 用途：本地扫经验库（kb.jsonl + 踩坑总表 + 经验库），0 token，出候选 → 追加 scan/queue.md（状态=待处理）；
-#       扫完推 qq-send（只推摘要+指针）；队列上限 50，30 天没动标「过期」，满则归档。
+# ------------------------------------------------------------
+# exp-scan.sh — 经验库反馈闭环扫描
+#
+# 用途：离线扫描经验沉淀三源（经验库 / 踩坑总表 / 报错知识库 kb.jsonl），
+#       以 Jaccard 相似度聚类出"重复踩坑"、以关键词命中"可复用模式"，
+#       产出候选追加至 scan/queue.md（状态=待处理）；队列上限 50 条，
+#       待处理超 30 天标"过期"，超限的最老过期条目归档。
+#       通知仅推送摘要与队列指针（对接统一推送入口，缺失时打印终端）。
+#
 # 用法：exp-scan.sh [--dry-run] [--force]
-#   --dry-run 只打印候选，不写队列、不发通知、不动状态
-#   --force   忽略节流，立即执行
-# 默认节流：距上次运行 ≥7 天 或 新增候选 ≥5 条 → 执行（取先到）
-# 状态：/var/lib/exp-scan/（last_run / seen）　日志：/var/log/exp-scan.log
-# 开源包：v2.0 发布整理 2026-10-17（源文件创建日期不详）
+#   --dry-run  只打印候选，不写队列、不发通知、不更新状态
+#   --force    忽略节流，立即执行
+#
+# 默认节流：距上次运行 ≥7 天，或新增候选 ≥5 条 → 执行（先到为准）
+# 配置（ops.conf）：WORKSPACE  WK_STATE_DIR
+# 状态：${WK_STATE_DIR:-/var/lib/exp-scan}/last_run
+# ------------------------------------------------------------
 set -u
-if [ -f /usr/local/lib/wk.sh ]; then source /usr/local/lib/wk.sh; else echo "WARN: 未找到 /usr/local/lib/wk.sh，部分功能将受限" >&2; fi
-# 降级兜底：私有库缺失时提供最小实现，保证主流程不中断
-if ! declare -F wk_log >/dev/null 2>&1; then
-  wk_log() { printf '[%s] %s\n' "$(date +%F\ %T)" "$*" >&2; }
-  wk_notify() { printf '[notify] %s\n' "$*" >&2; }
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/ops_lib.sh"
 WK_NAME=exp-scan
 
-WS="${WUKONG_WS:-<OPENCLAW_PATH>}"
+ops_require_ws
 SCAN_DIR="$WS/scan"
 QUEUE="$SCAN_DIR/queue.md"
 ARCHIVE="$SCAN_DIR/queue-archive.md"
 STATE_DIR="${WK_STATE_DIR:-/var/lib/exp-scan}"
 DRY=0; FORCE=0
-for a in "$@"; do case "$a" in --dry-run) DRY=1;; --force) FORCE=1;; esac; done
+for arg in "$@"; do case "$arg" in --dry-run) DRY=1;; --force) FORCE=1;; esac; done
 mkdir -p "$SCAN_DIR" "$STATE_DIR" 2>/dev/null || { wk_log "无法建目录"; exit 1; }
 
 export WS DRY QUEUE ARCHIVE STATE_DIR FORCE
@@ -141,7 +144,7 @@ while len(allrows)>50:
     victim=min(exp,key=lambda r:r[4])
     allrows.remove(victim); arch.append(victim)
 
-def emit(fp,rows,title):
+def emit(rows,title):
     out=[title,"",f"| 编号 | 来源 | 摘要 | 状态 | 日期 |","|---|---|---|---|---|"]
     for r in rows: out.append("| "+" | ".join(x.replace('|','/') for x in r)+" |")
     out.append(""); out.append("<!-- machine: 编号\t来源\t摘要\t状态\t日期 -->")
@@ -156,18 +159,18 @@ if arch: print(f"  归档 {len(arch)} 条 → queue-archive.md")
 if DRY:
     print("dry-run：未写 queue.md、未发通知、未更新状态。")
     sys.exit(0)
-open(QUEUE,'w',encoding='utf-8').write(emit(QUEUE,allrows,"# 经验库扫描队列（P5）\n\n由 `exp-scan.sh` 维护；状态：待处理/已采纳/已回灌/已忽略/过期。上限 50，30 天没动标过期。"))
+open(QUEUE,'w',encoding='utf-8').write(emit(allrows,"# 经验队列\n\n由 `exp-scan.sh` 维护；状态：待处理/已采纳/已忽略/过期。上限 50，待处理超 30 天标过期。"))
 if arch:
     prev=open(ARCHIVE,encoding='utf-8').read() if os.path.exists(ARCHIVE) else "# 经验库扫描队列 · 归档\n"
-    open(ARCHIVE,'w',encoding='utf-8').write(prev+"\n"+emit(ARCHIVE,arch,"## "+TODAY+" 归档"))
+    open(ARCHIVE,'w',encoding='utf-8').write(prev+"\n"+emit(arch,"## "+TODAY+" 归档"))
 open(lr,'w').write(TODAY)
 
 # ---- 7. 通知（摘要+指针）----
 pend=[r for r in allrows if r[3]=='待处理']
 if pend and news:
-    msg=f"本周扫描：{len(pend)} 条待处理\n"
+    msg=f"exp-scan：{len(pend)} 条待处理\n"
     for i,r in enumerate(pend[:5],1): msg+=f"{i}. {short(r[2],50)}\n"
-    msg+='回"看清单"查看'
+    msg+=f"详情见队列文件：{QUEUE}"
     print("NOTIFY>>>"+msg)
 PY
 )

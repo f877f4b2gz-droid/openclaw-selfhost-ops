@@ -1,34 +1,40 @@
 #!/bin/bash
-# ref-count.sh — 被引次数静态扫描（P6）
-# 用途：对"未提纯层"（scratch/、临时脚本区、散落脚本）统计【被引次数 + 引用方 + 层级】，
-#       供分层考核：未提纯层 =0 且 30 天没动 → 候选清理；砖层永不自动清（只展示）；墙/房不考核。
+# ------------------------------------------------------------
+# ref-count.sh — 脚本被引次数静态扫描
+#
+# 用途：对未沉淀脚本（scratch/、临时脚本区、工作区散落脚本）统计
+#       【被引次数 + 引用方 + 层级】，供分层考核。层级采用建筑隐喻
+#       （与 docs/架构设计与复用体系.md §七 P6 一致）：
+#       砖=共享层(被引≥3，永不自动清理、仅展示) / 墙=被引层 / 房=依赖外部的出口层 /
+#       未提纯=未沉淀层（=0 且 30 天未动 → 清理候选）；豁免层不参与考核。
+#
 # 用法：ref-count.sh [--list-zero] [--json]
+#   --list-zero  只列被引 =0 的脚本
+#   --json       每行输出一个 JSON 对象（供程序消费）
+#
 # 输出：层级<TAB>被引次数<TAB>脚本路径<TAB>引用方(逗号分隔)
-# 只读，不删除。规则：docs/规则库.md @存活期@scratch@被引次数；docs/总纲.md
-# 开源包：v2.0 发布整理 2026-10-17（源文件创建日期不详）
+# 只读，不删除任何文件。
+# 配置（ops.conf）：WORKSPACE
+# ------------------------------------------------------------
 set -u
-if [ -f /usr/local/lib/wk.sh ]; then source /usr/local/lib/wk.sh; else echo "WARN: 未找到 /usr/local/lib/wk.sh，部分功能将受限" >&2; fi
-# 降级兜底：私有库缺失时提供最小实现，保证主流程不中断
-if ! declare -F wk_log >/dev/null 2>&1; then
-  wk_log() { printf '[%s] %s\n' "$(date +%F\ %T)" "$*" >&2; }
-  wk_notify() { printf '[notify] %s\n' "$*" >&2; }
-fi
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/ops_lib.sh"
 WK_NAME=ref-count
 
-WS="${WUKONG_WS:-<OPENCLAW_PATH>}"
+ops_require_ws
 LIST_ZERO=0; JSON=0
-for a in "$@"; do case "$a" in --list-zero) LIST_ZERO=1;; --json) JSON=1;; esac; done
+for arg in "$@"; do case "$arg" in --list-zero) LIST_ZERO=1;; --json) JSON=1;; esac; done
 
 # 引用扫描范围（只读既有文件）
 SCAN_DIRS=(/etc/cron.d /usr/local/bin "$WS/tools" "$WS/scripts" "$WS/scratch" "$WS/docs" "$WS/projects")
+# 扫描时排除的目录/文件类型（降噪 + 防二进制误匹配）
 GREP_X=(--exclude-dir=node_modules --exclude-dir=.git --exclude-dir=backup --exclude-dir=state --exclude-dir=logs --exclude-dir=.venv --exclude-dir=archive --exclude-dir=dist --exclude-dir=assets --binary-files=without-match)
-# 豁免层（不参与"=0就清"）
+# 豁免层（不参与"=0 即清"考核）
 EXEMPT_PREFIX=("$WS/tools/" "/usr/local/bin/")
 EXEMPT_NAME=("wk.sh" "qq-send.sh")
 
 is_exempt_dir(){ local p="$1"; for x in "${EXEMPT_PREFIX[@]}"; do [[ "$p" == "$x"* ]] && return 0; done; return 1; }
 
-# 目标：未提纯层 = scratch/（临时脚本区）+ 散落脚本（workspace 根）；只计脚本（.sh/.py）
+# 目标：未沉淀层 = scratch/（临时脚本区）+ 工作区根散落脚本；只统计 .sh/.py
 TARGETS=()
 while IFS= read -r f; do [ -n "$f" ] && TARGETS+=("$f"); done < <(
   { find "$WS/scratch" -maxdepth 1 -type f \( -name '*.sh' -o -name '*.py' \) 2>/dev/null
