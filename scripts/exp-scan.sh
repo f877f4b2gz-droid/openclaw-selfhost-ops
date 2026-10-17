@@ -9,7 +9,12 @@
 # 状态：/var/lib/exp-scan/（last_run / seen）　日志：/var/log/exp-scan.log
 # 开源包：v2.0 发布整理 2026-10-17（源文件创建日期不详）
 set -u
-source /usr/local/lib/wk.sh
+if [ -f /usr/local/lib/wk.sh ]; then source /usr/local/lib/wk.sh; else echo "WARN: 未找到 /usr/local/lib/wk.sh，部分功能将受限" >&2; fi
+# 降级兜底：私有库缺失时提供最小实现，保证主流程不中断
+if ! declare -F wk_log >/dev/null 2>&1; then
+  wk_log() { printf '[%s] %s\n' "$(date +%F\ %T)" "$*" >&2; }
+  wk_notify() { printf '[notify] %s\n' "$*" >&2; }
+fi
 WK_NAME=exp-scan
 
 WS="${WUKONG_WS:-<OPENCLAW_PATH>}"
@@ -169,5 +174,9 @@ PY
 printf '%s\n' "$out" | grep -v '^NOTIFY>>>' || true
 if [ "${EXP_NO_NOTIFY:-0}" != "1" ] && [ "$DRY" -eq 0 ] && printf '%s\n' "$out" | grep -q '^NOTIFY>>>'; then
   msg=$(printf '%s\n' "$out" | sed -n 's/^NOTIFY>>>//p')
-  /usr/local/bin/qq-send.sh --key exp-scan-weekly "$msg" && wk_log "已推 qq-send" || wk_log "qq-send 失败"
+  if [ -x /usr/local/bin/qq-send.sh ]; then
+    /usr/local/bin/qq-send.sh --key exp-scan-weekly "$msg" && wk_log "已推 qq-send" || wk_log "qq-send 失败"
+  else
+    echo "WARN: 未找到 /usr/local/bin/qq-send.sh，通知打印到终端：$msg" >&2
+  fi
 fi

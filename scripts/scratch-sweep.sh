@@ -8,7 +8,12 @@
 # 开源包：v2.0 发布整理 2026-10-17（源文件创建日期不详）
 # 规则：docs/规则库.md @存活期@scratch@被引次数；scratch/README.md
 set -u
-source /usr/local/lib/wk.sh
+if [ -f /usr/local/lib/wk.sh ]; then source /usr/local/lib/wk.sh; else echo "WARN: 未找到 /usr/local/lib/wk.sh，部分功能将受限" >&2; fi
+# 降级兜底：私有库缺失时提供最小实现，保证主流程不中断
+if ! declare -F wk_log >/dev/null 2>&1; then
+  wk_log() { printf '[%s] %s\n' "$(date +%F\ %T)" "$*" >&2; }
+  wk_notify() { printf '[notify] %s\n' "$*" >&2; }
+fi
 WK_NAME=scratch-sweep
 
 WS="${WUKONG_WS:-<OPENCLAW_PATH>}"
