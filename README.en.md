@@ -3,7 +3,7 @@
 <p align="left">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/platform-Linux-blue.svg" alt="Platform: Linux">
-  <img src="https://img.shields.io/badge/status-v1.0-blue.svg" alt="Status: v1.0">
+  <img src="https://img.shields.io/badge/status-v2.0-blue.svg" alt="Status: v2.0">
 </p>
 
 [简体中文](README.md) ｜ **English**
@@ -11,6 +11,21 @@
 > Asset governance for a **long-running self-hosted AI assistant** (OpenClaw and the like): keep docs, config, backups, skills, memory, and logs **filed, recorded, and self-checking** — low-maintenance, rollback-ready, without bloating your disk or your context window.
 
 *Note: the `docs/` specs are currently written in Chinese; this file is the English overview.*
+
+## v2.0 Core Components
+
+> Self-hosted AI agent asset & knowledge governance framework. Say goodbye to context bloat and knowledge drift.
+
+- [x] Total index & pointer check (anti-drift)
+- [x] Scratch sweep (garbage collection with survival-window review)
+- [x] Ref count (static analysis of reusable assets)
+- [x] Exp scan & queue (feedback loop with a bounded queue)
+
+> This v2.0 was distilled from a two-machine collaboration setup. The v1.0 base ops scripts (log-rotate and friends, detailed below) and the v2.0 governance framework coexist and complement each other.
+
+## Dependencies
+
+The framework is deeply integrated with a self-hosted OpenClaw environment; some advanced features rely on private libraries (e.g. `/usr/local/lib/wk.sh`, `qq-send.sh`). The open-source edition ships the core logic; external environments should adapt these interfaces themselves. When the private libraries are missing, the scripts print a warning and degrade gracefully (logs/notifications fall back to terminal output) instead of aborting.
 
 ## Contents
 
