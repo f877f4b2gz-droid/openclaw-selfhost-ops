@@ -78,6 +78,8 @@ sudo editor /etc/openclaw-ops/ops.conf
 crontab -e   # 示例见 cron/ops.cron.example
 ```
 
+自测（不碰真实环境，临时目录里跑）：`bash tests/smoke.sh`。
+
 无 root 场景：`OPS_CONF=/path/to/ops.conf ./scripts/...`。
 依赖缺失不中断：私有辅助库（推送通道等）没配时，脚本降级到本地日志并打印警告，主流程照跑。
 

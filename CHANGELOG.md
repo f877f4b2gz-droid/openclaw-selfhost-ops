@@ -20,6 +20,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow 
 - README (Chinese and English) rewritten around symptoms and mechanisms rather than a component list, with measured before/after numbers.
 - `cron/ops.cron.example` — added the daily check and hourly spend guard, with a note on why the guard must not run every few minutes.
 
+### Performance
+
+- `log-fingerprint.sh` rewritten as a single python3 process. Per-line `md5sum` spawning took 5.7 s per 1,000 lines; the current version takes 57 ms.
+
 ### Notes
 
 - The daily check deliberately excludes the assistant's own logs. Scanning them turns every alert the assistant emits into the next day's "system fault".

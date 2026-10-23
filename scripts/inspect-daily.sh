@@ -205,5 +205,6 @@ if [ ! -x "${NOTIFY_ARGV[0]}" ]; then
   printf '%s\n' "$OUT"
   exit 0
 fi
+mkdir -p "$LOG_DIR" 2>/dev/null
 printf '%s' "$OUT" | "${NOTIFY_ARGV[@]}" >>"$LOG_DIR/inspect-daily.log" 2>&1
 exit "$ALERT"

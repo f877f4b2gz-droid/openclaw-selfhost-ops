@@ -33,6 +33,13 @@ if [ -z "${WORKSPACE:-}" ]; then
 fi
 
 DIR="${KB_DIR:-$WORKSPACE/knowledge/log-errors}"
+# 知识库是纯文本写入目标：防止被替换成软链后顺着写到别处
+for target in kb.jsonl pending.tsv; do
+  if [ -L "$DIR/$target" ]; then
+    echo "ERROR: $DIR/$target 是软链接，拒绝写入" >&2
+    exit 3
+  fi
+done
 KB="$DIR/kb.jsonl"
 PEND="$DIR/pending.tsv"
 mkdir -p "$DIR" 2>/dev/null
@@ -89,6 +96,12 @@ PY
       esac
     done
     [ -z "$fp" ] && { echo "缺少 --fp" >&2; exit 2; }
+    # 状态只允许三种。写错一个字母，查询就永远命中不了，
+    # 巡检会把已登记的错误重新当"新"报出来（这类静默失效最难查）。
+    case "$status" in
+      known-harmless|known-manual|new) ;;
+      *) echo "未知状态：$status（只允许 known-harmless / known-manual / new）" >&2; exit 2 ;;
+    esac
     python3 - "$KB" "$fp" "$src" "$sample" "$status" "$cause" "$impact" "$action" "$ref" "$conf" <<'PY'
 import json, sys, datetime
 kb, fp, src, sample, status, cause, impact, action, ref, conf = sys.argv[1:11]
@@ -124,6 +137,11 @@ with open(kb, 'w', encoding='utf-8') as f:
         f.write(line + '\n')
     f.write(json.dumps(rows, ensure_ascii=False) + '\n')
 PY
+    # 有结论的指纹从待研究清单里摘掉，避免 pending 只增不减
+    if [ "$status" != "new" ] && [ -f "$PEND" ]; then
+      tmp2=$(mktemp)
+      awk -F'\t' -v fp="$fp" '$1 != fp' "$PEND" > "$tmp2" && mv "$tmp2" "$PEND"
+    fi
     echo "added $fp ($status)"
     ;;
   *)

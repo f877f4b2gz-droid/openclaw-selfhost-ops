@@ -88,6 +88,8 @@ sudo editor /etc/openclaw-ops/ops.conf
 crontab -e   # see cron/ops.cron.example
 ```
 
+Self-check without touching the real system: `bash tests/smoke.sh`.
+
 No root: `OPS_CONF=/path/to/ops.conf ./scripts/...`.
 Missing dependencies never abort a run — private helpers such as a notification channel degrade to local log output with a warning.
 
