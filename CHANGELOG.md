@@ -11,6 +11,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow 
 - README: `git clone` now uses the real repository URL instead of a placeholder.
 - docs: removed machine-specific file names, directory listings and business-specific examples from 信息资产管理规范 and 双机协作规范; mechanisms kept, examples generalized.
 
+### Removed
+
+- `docs/规范-技能.md` — skill versioning is specific to how one agent happens to organize its own skills; it overlaps with 信息资产管理规范 (inventory / version / change log) and adds little for a general reader. The corresponding checklist row in `docs/巡检.md` and the doc table entry in README were dropped with it.
+
 ### Notes
 
 - No script changes. These are operational findings that belong to the environment, not to the code.
