@@ -164,6 +164,7 @@ DAILY_MIN=10
 
 # ---------- 每日巡检（inspect-daily.sh）----------
 # 需检查的挂载点（空格分隔，报告里按顺序出现）
+# 注意：本文件是空格分隔列表，所以路径本身不能含空格
 INSPECT_MOUNTS="/ /data"
 # SMART 巡检磁盘（空格分隔）
 SMART_DISKS="/dev/sda"
@@ -177,4 +178,6 @@ INSPECT_PROCS=""
 INSPECT_APP_IGNORE=""
 INSPECT_DOCKER_IGNORE=""
 # 推送命令（收件人由本机决定，不入库）
+# 只接受「可执行文件 + 空格分隔的参数」，不经过 shell 求值；
+# 收件人这类本机信息写在这里，不要写进仓库脚本
 INSPECT_NOTIFY_CMD=""
