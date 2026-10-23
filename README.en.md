@@ -1,191 +1,145 @@
-# OpenClaw Self-Host Ops Governance
+# OpenClaw Self-Host Ops
 
 <p align="left">
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/platform-Linux-blue.svg" alt="Platform: Linux">
-  <img src="https://img.shields.io/badge/status-v2.0-blue.svg" alt="Status: v2.0">
+  <img src="https://img.shields.io/badge/status-v2.1-blue.svg" alt="Status: v2.1">
+  <img src="https://img.shields.io/badge/dependencies-none-brightgreen.svg" alt="Dependencies: none">
 </p>
 
 [简体中文](README.md) ｜ **English**
 
-> Asset governance for a **long-running self-hosted AI assistant** (OpenClaw and the like): keep docs, config, backups, skills, memory, and logs **filed, recorded, and self-checking** — low-maintenance, rollback-ready, without bloating your disk or your context window.
+> Governance for a **long-running self-hosted AI agent**: assets stop drifting, logs stop flooding, alerts stop being ignored, lessons stop being re-learned the hard way.
 
-*Note: the `docs/` specs are currently written in Chinese; this file is the English overview.*
+Plain bash scripts plus written specs, distilled from a multi-agent production setup that runs every day. No runtime dependencies, no daemon, every script usable on its own.
 
-## v2.0 Core Components
-
-> Self-hosted AI agent asset & knowledge governance framework. Say goodbye to context bloat and knowledge drift.
-
-- [x] Total index & pointer check (anti-drift)
-- [x] Scratch sweep (garbage collection with survival-window review)
-- [x] Ref count (static analysis of reusable assets)
-- [x] Exp scan & queue (feedback loop with a bounded queue)
-
-> This v2.0 was distilled from a two-machine collaboration setup. The v1.0 base ops scripts (log-rotate and friends, detailed below) and the v2.0 governance framework coexist and complement each other.
-
-## Dependencies
-
-The framework is deeply integrated with a self-hosted OpenClaw environment; some advanced features rely on private libraries (e.g. `/usr/local/lib/wk.sh`, `qq-send.sh`). The open-source edition ships the core logic; external environments should adapt these interfaces themselves. When the private libraries are missing, the scripts print a warning and degrade gracefully (logs/notifications fall back to terminal output) instead of aborting.
-
-## Contents
-
-- [Why "integration"](#why-integration-not-yet-another-point-tool)
-- [1. The problem (before)](#1-the-problem-before)
-- [2. What it does (after)](#2-what-it-does-after)
-- [3. Results (measurable)](#3-results-measurable)
-- [4. Priority tiers](#4-priority-tiers)
-- [5. Layout](#5-layout)
-- [6. Document index](#6-document-index)
-- [7. Quick start](#7-quick-start)
-- [8. Who it's for](#8-who-its-for)
-- [9. FAQ](#9-faq)
-- [10. License](#10-license)
+*Note: the `docs/` specs are written in Chinese; this file is the English overview.*
 
 ---
 
-## Why "integration", not yet another point tool
+## Do these symptoms look familiar
 
-The hard part of running a resident AI assistant long-term isn't features — it's **operational order**. Point solutions are everywhere: backups, memory, skills, cost — each has off-the-shelf projects, **but nobody hangs them together into one system**.
+- The same setting is written in two places; you change one, forget the other, and two weeks later nobody knows which is correct.
+- Thirty ad-hoc scripts pile up. Nobody dares delete them, and nobody knows which are still called.
+- The daily check pushes forty "errors" a day. You ignore it within three days — and then miss a real failure inside the noise.
+- The model silently leaves the free tier for a paid one. You find out from the monthly bill.
+- Context compaction erases what you were doing, so the same mistake gets made twice.
+- Hard-won debugging conclusions live in chat scrollback. A week later they are unsearchable, which means they were never recorded.
 
-This project is that integration: **unified governance for 5+1 asset classes** (full lifecycle + weekly auto-reconciliation + a rollback-ready ledger). It **doesn't compete with point tools on "my backup is better than yours"** — it does one thing: make scattered practices **filed, connected, and self-checking**.
+None of this is inexperience. It is the absence of **governance mechanisms**. That is what this repo is.
 
-## 1. The problem (before)
+---
 
-The "chronic diseases" that almost always show up after long uptime:
+## Four layers, mapped to those symptoms
 
-| Pain point | Consequence |
-|---|---|
-| Docs scattered, no index, no status marker; new drafts overwrite old ones | You can't tell which is authoritative — effectively no docs |
-| Config changed with no backup, no record | No way to roll back; start over |
-| Logs grow without bound (e.g. a 400MB+ single `cache-trace` file; uncapped service logs) | Silently fills the disk |
-| Backups mixed together, random names, no retention policy | What you need is missing; what should go piles up |
-| No versions for skills; `MEMORY` grows ever thicker | Changes untraceable; a bloated context burns tokens every turn |
-| Session residue (`*.trajectory.jsonl` / `*.bak-*` / `*.checkpoint.*`) accumulates | Wastes disk, slows things down |
+### 1. Assets stop drifting
 
-## 2. What it does (after)
+- **Single source of truth** — every fact lives in exactly one place; everything else holds a pointer, never a copy of the body.
+- **Dictionary-style index** — cross-category lookup goes through an index, not memory.
+- **Survival-window sweep** — `scratch-sweep.sh` flags drafts that are "older than 30 days, referenced zero times, for two consecutive rounds" for the trash. It only prints a list; it never deletes on its own.
+- **Reference counting** — `ref-count.sh` sorts loose scripts into shared / referenced / dependency / unelevated / exempt tiers, so "can we delete this" is answered by evidence instead of instinct.
 
-Assets are split into **5+1 classes**, plus two add-ons: "trash" and "self-check". Each class defines: **single location · naming rule · retention/archival policy · change log**.
+### 2. Logs stop flooding (the headline of this release)
 
-1. **Docs** → `docs/` as the single source of truth: a unified status header (title / updated / status), an index, old versions moved to `archive/`.
-2. **Backups** → script output and manual backups **filed separately**; naming `name.bak.YYYYMMDD-HHMMSS`; a hard retention cap; operations recorded in a `ledger.md`.
-3. **Config** → `.bak` before every change; a **daily full core snapshot** (keep 30); a persistent `.last-good`.
-4. **Skills** → enforce `VERSION` + `CHANGELOG.md`; register in an inventory; disable by moving to `_disabled/` (never delete).
-5. **Memory** → `MEMORY.md` holds only **pointers / red lines**, not the body; daily notes archived after 30 days.
-6. **Logs** → `cache-trace` over 300MB is rewritten in place, keeping only the latest **20%**; service logs truncated over 50MB; rotated files cleaned after 7/14/30 days.
+The fastest way to kill a daily check is to report every line containing `error`. Twenty messages from the same root cause, three days in a row, and the report is dead weight.
 
-- **Add-on · Trash** → `trash/` keeps 30 days, **prefer trash over rm**.
-- **Add-on · Self-check** → weekly `asset-audit`: checks all 5+1 classes, **alerts on anything unregistered or over-limit** (pushed to IM).
+This repo reports **by fingerprint**, not by line count:
 
-## 3. Results (measurable)
+| Stage | Script | What it does |
+|---|---|---|
+| Normalize | `log-fingerprint.sh` | Strips timestamps, PIDs, paths, numbers and quoted payloads; redacts tokens, JWTs and long blobs. The same class of error always collapses to one ten-character hash. |
+| Record the verdict | `log-error-kb.sh` | Each fingerprint is classified once: `known-harmless` / `known-manual` / `new`, with cause, impact, action and a 180-day re-review date. |
+| Report three numbers | `inspect-daily.sh` | The daily output carries only 「new N / manual N / ignored N」 plus at most three fresh samples. |
 
-- **`cache-trace.jsonl`**: uncapped → **steady 170–300MB** (auto-shrinks past the threshold).
-- **Core snapshots**: none → **1/day, 30 kept**.
-- **Config rollback**: from "none" to "**one `cp` command**".
-- **Docs**: from scattered → indexed + **weekly auto-reconciliation** (instant alert on unregistered files).
-- **Context / tokens**: only **small fixed files** are injected; high-churn files (logs, state) live outside the context (rules in `docs/规范-上下文与缓存.md`).
-- **Disk**: logs, session residue, and old backups all have definite caps and cleanup cycles.
+Measured on one machine: 53 lines of noise became 「new 11 / ignored 42」 — single digits actually needing a human.
 
-> The concrete numbers here and in each spec are **example defaults (from real use)** — values tuned by long-running practice, not theory; adjust per each doc's "4. How to adjust".
+There is a hidden trap, documented in `docs/巡检.md`: **the check must not scan itself.** If the assistant's own log is treated as a system fault, every alert it emits becomes tomorrow's alert. That loop accounted for roughly half of all open items in testing.
 
-## 4. Priority tiers
+### 3. Alerts stop being ignored
 
-Every spec carries a tier in its header:
+- **Cooldown state must be writable.** Deduplication reads a "last sent" file. If its directory is missing or read-only, cooldown silently fails and alerts repeat at the check interval. Scripts verify this on startup and say so loudly.
+- **Thresholds sized per day, not per snack.** Cost alerts calibrated to a single meal will fire daily and teach everyone to ignore them.
+- **Spend guard** (`model-guard.sh`): is the primary model still on the free tier, is the free endpoint reachable, is the paid balance bottoming out, is any session quietly pinned to a paid model, did 24-hour real spend exceed the cap. It alerts only when one of these is true.
 
-- **Required** — skipping it will cause trouble (backup, config, redaction, logs).
-- **Recommended** — skipping it accumulates debt that rots over time (docs, skills, inspection, context & cache).
-- **Optional** — case by case (e.g. memory archival details).
+### 4. Lessons stop evaporating
 
-> Note: anything labeled "optional" is done by nobody, and the rule dies. So only things that truly depend on personal preference are demoted.
+- **Experience scan** — `exp-scan.sh` clusters repeated mistakes and reusable patterns offline into a bounded queue (max 50 entries, 30-day expiry, overflow archived).
+- **Session checkpoint** — `checkpoint.sh` writes done / doing / next to disk before a model switch, compaction or reset. On resume you read the file instead of reconstructing from memory.
 
-## 5. Layout
+---
+
+## 60-second start
+
+```bash
+git clone <this-repo> && cd openclaw-selfhost-ops
+
+# 1. Configure (the only file you edit, and it never enters the repo)
+sudo install -Dm644 templates/ops.conf.example /etc/openclaw-ops/ops.conf
+sudo editor /etc/openclaw-ops/ops.conf
+
+# 2. Dry-run everything first — read-only by default
+./scripts/inspect-daily.sh --dry
+./scripts/model-guard.sh --dry-run
+./scripts/scratch-sweep.sh --dry-run
+./scripts/ref-count.sh --list-zero
+./scripts/exp-scan.sh --dry-run
+
+# 3. Only then wire up cron
+crontab -e   # see cron/ops.cron.example
+```
+
+No root: `OPS_CONF=/path/to/ops.conf ./scripts/...`.
+Missing dependencies never abort a run — private helpers such as a notification channel degrade to local log output with a warning.
+
+---
+
+## Layout
 
 ```text
 openclaw-selfhost-ops/
-├── README.md               Chinese README
-├── README.en.md            English README (this file)
-├── LICENSE
-├── docs/                   governance specs
-├── lib/
-│   └── ops_lib.sh          Shared library: config load, dependency fallback, path checks
 ├── scripts/
-│   ├── asset-audit.sh      Asset health check (5+1 classes + projects + self-backup)
-│   ├── log-rotate.sh       Service-log rotation / session residue / backup slimming / media cleanup
-│   ├── core-backup.sh      Three-tier backup: core rollback tarball / daily snapshot / weekly encrypted bundle
-│   ├── backup-sweep.sh     Whole-disk backup dedup (keep newest N per origin)
-│   ├── cache-trace-trim.sh Cache-trace slimming (by age + hard size cap)
-│   ├── bak-clean.sh        `.bak` cleanup (keep newest N per target)
-│   ├── trash-clean.sh      Trash expiry cleanup (the "trash > rm" trash)
-│   ├── scratch-sweep.sh    v2.0: scratch-area survival review & GC
-│   ├── ref-count.sh        v2.0: static reference counting for tiered assessment
-│   └── exp-scan.sh         v2.0: experience-base scan with bounded feedback queue
-├── templates/
-│   └── ops.conf.example    Path & threshold template (install to /etc/openclaw-ops/ops.conf)
-└── cron/
-    └── ops.cron.example    Example crontab
+│   ├── inspect-daily.sh     daily check (disk/SMART/temp/services/ports/processes/logs, fingerprint reporting)
+│   ├── log-fingerprint.sh   log normalization and redaction
+│   ├── log-error-kb.sh      error knowledge base (harmless/manual/new, 180-day review)
+│   ├── model-guard.sh       model spend guard (free-tier first, alert de-noising)
+│   ├── checkpoint.sh        session checkpoint (survives context loss)
+│   ├── scratch-sweep.sh     draft survival-window sweep
+│   ├── ref-count.sh         static reference counting
+│   ├── exp-scan.sh          experience scan and feedback queue
+│   ├── asset-audit.sh       asset audit
+│   ├── core-backup.sh       core asset backup
+│   ├── backup-sweep.sh      backup dedup and rotation
+│   ├── bak-clean.sh         expired backup cleanup
+│   ├── trash-clean.sh       trash cleanup
+│   ├── log-rotate.sh        log rotation
+│   └── cache-trace-trim.sh  cache and trace trimming
+├── lib/ops_lib.sh           config loading, dependency degradation, path checks
+├── templates/ops.conf.example
+├── docs/                    specs and design notes (Chinese)
+└── cron/ops.cron.example    sample schedule
 ```
 
-> Destructive scripts all support `--dry-run` to preview first. `backup-sweep.sh` goes further —
-> it **previews by default**; deleting requires an explicit `--apply`.
+---
 
-## 6. Document index
+## Docs
 
-| Document | Scope | Tier | Purpose |
-|---|---|---|---|
-| docs/规范-文档.md | 5+1 assets | Recommended | Single source of truth, status header, index, archive |
-| docs/规范-配置.md | 5+1 assets | Required | Back up before change, snapshots, `.last-good`, syntax check |
-| docs/规范-备份.md | 5+1 assets | Required | Filing, naming, retention, ledger, restore |
-| docs/规范-技能.md | 5+1 assets | Recommended | VERSION + CHANGELOG + inventory, disable via `_disabled/` |
-| docs/规范-记忆.md | 5+1 assets | Optional | MEMORY as pointers only, archive stale notes |
-| docs/规范-日志.md | 5+1 assets | Required | Log caps, rotation, expiry cleanup |
-| docs/规范-脱敏.md | Cross-cutting | Required | Pre-publish redaction: placeholders, ignore rules, secret scan |
-| docs/巡检.md | Cross-cutting | Recommended | Periodic auto health check, alert only on anomalies |
-| docs/规范-上下文与缓存.md | Cross-cutting | Recommended | What not to put in context, when cache breaks, change discipline |
+| Doc | Contents |
+|---|---|
+| `docs/巡检.md` | Check items, fingerprint-based error governance, alert de-noising rules |
+| `docs/信息资产管理规范.md` | Asset classes, single location, naming, retention, change, lookup keys |
+| `docs/架构设计与复用体系.md` | Three-layer structure and the "elevation threshold" for reuse |
+| `docs/双机协作规范.md` | Orchestrator/executor boundaries and script ownership |
+| `docs/规范-*.md` | Per-topic specs: docs, config, backup, skills, memory, logs, redaction |
 
-> Document filenames are Chinese on purpose (they're the spec titles); the content is in Chinese as noted above.
+---
 
-## 7. Quick start
+## Fit and non-fit
 
-1. **Prepare config**: `sudo install -Dm644 templates/ops.conf.example /etc/openclaw-ops/ops.conf`, then edit paths and thresholds for your host (scripts read here by default). **Without root**, place it anywhere and point `OPS_CONF=/path/ops.conf` at it.
-2. **Run a check**: `chmod +x scripts/*.sh` and run `./scripts/asset-audit.sh`; see the output (report written to `$WORKSPACE/logs/asset-audit.log`).
-3. **Schedule it**: following `cron/ops.cron.example`, add the cleanup/backup jobs to `<crontab>` (for OpenClaw users, usually `/etc/cron.d/`). The example lists all seven with suggested times.
-4. **Set up alerts**: point `ALERT_CMD` at your notification script (IM / email / webhook — anything). Leave it empty to log only.
-5. **(Optional) Verify alerts work**: once `ALERT_CMD` is set, run `asset-audit.sh` and confirm you get a test push; without it the tool still works — anomalies just go to the log.
+**Fits**: self-hosted AI agents that run for months, multi-machine collaboration, and estates where assets and logs are already out of hand.
+**Does not fit**: a toy chatbot you will not maintain. These mechanisms are shaped by "survive a year of operations"; short-term use will feel heavy.
 
-> One extra step for contributors: before submitting, self-check with `docs/规范-脱敏.md` — never commit real paths / domains / credentials.
+---
 
-## 8. Who it's for
+## License
 
-- Individuals self-hosting a **resident assistant** like OpenClaw / Claude-Code;
-- NAS / small-host tinkerers (limited resources, more afraid of runaway logs);
-- **People already using scattered backup / memory tools that don't talk to each other** — if you want "one system instead", this is it;
-- Anyone who wants "rollback-ready, traceable, low-maintenance".
-
-## 9. FAQ
-
-**Q: I don't have root. Can I still run it?**
-Yes. Scripts read `/etc/openclaw-ops/ops.conf` by default; without root, use `OPS_CONF=/your/path/ops.conf`. Alerts can be skipped too (`ALERT_CMD` empty).
-
-**Q: I only want backups / only log rotation. Can I use just that?**
-Yes — the three scripts are independent; pick what you need. Still, the value here is **integration + self-check**; see the top of this README for the point-tool comparison.
-
-**Q: Will it delete my files by mistake?**
-Destructive scripts support `--dry-run`: run it first to see "what would move", and only drop the flag once you're sure. Deletions always go to `trash/` first, and files are `.bak`'d before any change.
-
-**Q: My directories / services differ from the examples.**
-Everything is parameterized. Paths, thresholds, and the log list live in `ops.conf`; docs use placeholders (e.g. `<workspace>`).
-
-**Q: How does it relate to those point tools (backup / memory / cost)?**
-Not a replacement — they can coexist. This project doesn't chase "stronger at one thing"; it manages every asset class as **filed, reconciled, rollback-ready**.
-
-**Q: Is it resource-hungry?**
-Lightweight. The audit only `stat`s and counts; rotation and backup run on cron, taking seconds to tens of seconds.
-
-**Q: Does it work on Windows / macOS?**
-The scripts target Linux (NAS / small hosts), relying on `bash`, `cron`, `find`, `tar`. The ideas are portable — test any port yourself.
-
-**Q: What if I break something?**
-Every change is `.bak`'d first, and the ledger records the **restore command**; for config it's a single `cp`.
-
-## 10. License
-
-MIT, see [LICENSE](LICENSE).
+See [LICENSE](LICENSE). 简体中文: [README.md](README.md).
