@@ -15,6 +15,10 @@ Plain bash scripts plus written specs, distilled from a multi-agent production s
 
 *Note: the `docs/` specs are written in Chinese; this file is the English overview.*
 
+> **Built on one real OpenClaw setup.** Every number in this README (53 → 11 errors, 40% false positives) is measured, not estimated.
+>
+> It is not tied to that product: all six environment facts (data root / logs / sessions / media / config / alert command) are replaceable in the config file, so **in principle any agent runtime with a similar shape can be adapted**. See [`ADAPT.md`](ADAPT.md) for the agent-facing procedure.
+
 **Not running OpenClaw?** Hand the repo to your AI and point it at [`ADAPT.md`](ADAPT.md) — an adaptation sheet written for agents rather than humans: probe the environment, fill in six variables, run.
 
 ---

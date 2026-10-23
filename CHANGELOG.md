@@ -3,6 +3,22 @@
 All notable changes to this repository are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [2.2.2] - 2026-10-24
+
+### Fixed
+
+- `log-fingerprint.sh`: non-UTF-8 input (binary log fragments, GBK-encoded output, corrupted files) crashed the Python stage with `UnicodeDecodeError`. stdin is now reconfigured with `errors='replace'`.
+- `log-fingerprint.sh`: random binary lines each produced a distinct fingerprint, flooding reports with unreviewable entries. Lines where replacement characters exceed a third of the content now collapse to a single `<BINARY>` fingerprint.
+
+### Added
+
+- README (both languages): explicit note that the repo is built on one real OpenClaw deployment with measured numbers, while the six environment facts are replaceable — any agent runtime of similar shape can be adapted through `ADAPT.md`.
+
+### Verification
+
+- `tests/smoke.sh`: 15 pass, 0 fail.
+- Red-team round: shell metacharacters in log lines, 100k-character lines, binary input, empty input, newline/quote injection into the knowledge base, path traversal via `src`, 20-process concurrent writes. All handled; the two findings above were the only real defects.
+
 ## [2.2.1] - 2026-10-24
 
 ### Changed
