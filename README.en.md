@@ -4,14 +4,14 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-green.svg" alt="License: MIT"></a>
   <img src="https://img.shields.io/badge/platform-Linux-blue.svg" alt="Platform: Linux">
   <img src="https://img.shields.io/badge/status-v2.1-blue.svg" alt="Status: v2.1">
-  <img src="https://img.shields.io/badge/dependencies-none-brightgreen.svg" alt="Dependencies: none">
+  <img src="https://img.shields.io/badge/deps-system--only-brightgreen.svg" alt="Dependencies: system only">
 </p>
 
 [简体中文](README.md) ｜ **English**
 
 > Governance for a **long-running self-hosted AI agent**: assets stop drifting, logs stop flooding, alerts stop being ignored, lessons stop being re-learned the hard way.
 
-Plain bash scripts plus written specs, distilled from a multi-agent production setup that runs every day. No runtime dependencies, no daemon, every script usable on its own.
+Plain bash scripts plus written specs, distilled from a multi-agent production setup that runs every day. Pure bash plus tools already on the system (python3, curl, ss). No third-party libraries, no daemon, every script usable on its own; hardware checks skip themselves when a tool is missing.
 
 *Note: the `docs/` specs are written in Chinese; this file is the English overview.*
 
@@ -53,7 +53,7 @@ This repo reports **by fingerprint**, not by line count:
 
 Measured on one machine: 53 lines of noise became 「new 11 / ignored 42」 — single digits actually needing a human.
 
-There is a hidden trap, documented in `docs/巡检.md`: **the check must not scan itself.** If the assistant's own log is treated as a system fault, every alert it emits becomes tomorrow's alert. That loop accounted for roughly half of all open items in testing.
+There is a hidden trap, documented in `docs/巡检.md`: **the check must not scan itself.** If the assistant's own log is treated as a system fault, every alert it emits becomes tomorrow's alert. That loop accounted for roughly forty percent of all open items in testing.
 
 ### 3. Alerts stop being ignored
 

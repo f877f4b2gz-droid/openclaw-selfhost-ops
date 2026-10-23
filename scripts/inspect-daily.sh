@@ -27,6 +27,8 @@ SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 DRY=0
 [ "${1:-}" = "--dry" ] && DRY=1
 
+umask 077   # 报告与知识库可能含主机信息，默认只给属主读
+
 WS="${WORKSPACE:-$PWD}"
 KB_DIR="${KB_DIR:-$WS/knowledge/log-errors}"
 KB="$KB_DIR/kb.jsonl"; PEND="$KB_DIR/pending.tsv"
@@ -43,6 +45,8 @@ PROCS="${INSPECT_PROCS:-}"
 APP_IGNORE="${INSPECT_APP_IGNORE:-}"
 DOCKER_IGNORE="${INSPECT_DOCKER_IGNORE:-}"
 NOTIFY_CMD="${INSPECT_NOTIFY_CMD:-}"
+LOG_DIR="${LOG_DIR:-/var/log}"
+LOG_SCAN_DIRS="${LOG_SCAN_DIRS:-/var/log}"
 LOG_HOURS="${INSPECT_LOG_HOURS:-24}"
 
 # ---- 磁盘 ----
@@ -117,8 +121,10 @@ JOURNAL=$(journalctl --disk-usage 2>/dev/null | grep -oE '[0-9.]+ ?[KMGT]i?B?' |
 [ -z "$JOURNAL" ] && JOURNAL="-"
 
 RAW=$(mktemp); FPS=$(mktemp)
-mapfile -t APP_ERRS < <(find ${LOG_SCAN_DIRS:-/var/log} -name "error.log" -mmin -$((LOG_HOURS*60)) 2>/dev/null | while IFS= read -r f; do [ -r "$f" ] && printf '%s\n' "$f"; done)
-mapfile -t BIG_ERRS < <(find ${LOG_SCAN_DIRS:-/var/log} -name "error.log" -size +5M 2>/dev/null | while IFS= read -r f; do [ -r "$f" ] && printf '%s\n' "$f"; done)
+# 扫描目录按空格拆成数组：避免未加引号变量被路径名通配符意外展开
+read -r -a SCAN_DIRS <<< "$LOG_SCAN_DIRS"
+mapfile -t APP_ERRS < <(find "${SCAN_DIRS[@]}" -name "error.log" -mmin -$((LOG_HOURS*60)) 2>/dev/null | while IFS= read -r f; do [ -r "$f" ] && printf '%s\n' "$f"; done)
+mapfile -t BIG_ERRS < <(find "${SCAN_DIRS[@]}" -name "error.log" -size +5M 2>/dev/null | while IFS= read -r f; do [ -r "$f" ] && printf '%s\n' "$f"; done)
 
 # 注意：这里刻意不包含运维助手自身的日志文件（INSPECT_SELF_LOGS 显式指定才会扫）
 for lf in /var/log/syslog /var/log/kern.log /var/log/auth.log /var/log/cron.log \
@@ -176,10 +182,28 @@ SMART: ${SMART_BAD:--} ｜ 温度: ${TEMP}°C$TEMP_WARN
 新报错:$NEWSAMP
 大日志: $BIG"
 
+# 退出码语义：有任何异常项 → 1，便于包装脚本/监控直接判断
+ALERT=0
+for v in "$DOCKER_BAD" "$SVC_BAD" "$PORT_BAD" "$PROC_BAD"; do
+  case "$v" in ""|全部*) ;; *) ALERT=1 ;; esac
+done
+[ "$NEWN" -gt 0 ] && ALERT=1
+case "$BK_ST" in *未备份*) ALERT=1 ;; esac
+[ -n "$TEMP_WARN" ] && ALERT=1
+
 if [ "$DRY" = "1" ] || [ -z "$NOTIFY_CMD" ]; then
   printf '%s\n' "$OUT"
   [ -z "$NOTIFY_CMD" ] && echo "（未配置 INSPECT_NOTIFY_CMD，仅打印不推送）" >&2
-  exit 0
+  exit "$ALERT"
 fi
 
-printf '%s' "$OUT" | eval "$NOTIFY_CMD" >>"${LOG_DIR:-/var/log}/inspect-daily.log" 2>&1
+# 推送命令只接受「可执行文件路径 + 参数」，不经过 shell 求值：
+# 配置里写 eval 等于把配置文件提升为代码，一旦配置被改就是任意命令执行。
+read -r -a NOTIFY_ARGV <<< "$NOTIFY_CMD"
+if [ ! -x "${NOTIFY_ARGV[0]}" ]; then
+  echo "INSPECT_NOTIFY_CMD 不是可执行文件：${NOTIFY_ARGV[0]}" >&2
+  printf '%s\n' "$OUT"
+  exit 0
+fi
+printf '%s' "$OUT" | "${NOTIFY_ARGV[@]}" >>"$LOG_DIR/inspect-daily.log" 2>&1
+exit "$ALERT"

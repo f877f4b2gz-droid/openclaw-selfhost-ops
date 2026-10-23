@@ -58,6 +58,7 @@ if isinstance(m,dict): m=m.get('primary') or m.get('id') or ''
 print(m, (m.split('/')[0] if m else ''))
 PY
 )
+PRIMARY="${PRIMARY:-}"; PROVIDER="${PROVIDER:-}"
 say "主模型: ${PRIMARY:-未设}  provider: ${PROVIDER:-未知}"
 
 if [ "$PROVIDER" = "$FREE_PROVIDER" ]; then
@@ -75,8 +76,14 @@ p=d.get('models',{}).get('providers',{}).get(sys.argv[2],{}) or {}
 print(p.get('baseUrl',''), p.get('apiKey') or p.get('api_key') or '')
 PY
 )
+BASE="${BASE:-}"; FKEY="${FKEY:-}"
+# 令牌不进命令行：/proc/<pid>/cmdline 对其他用户可读，-H 直接传会让密钥暴露
+mk_header(){ local f; f=$(umask 077; mktemp) || return 1; printf 'Authorization: Bearer %s\n' "$1" > "$f"; printf '%s' "$f"; }
+
 if [ -n "$BASE" ]; then
-  CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 8 "$BASE/models" -H "Authorization: Bearer $FKEY" 2>/dev/null)
+  HF=$(mk_header "$FKEY") && CODE=$(curl -s -o /dev/null -w '%{http_code}' -m 8 "$BASE/models" -H "@$HF" 2>/dev/null)
+  [ -n "${HF:-}" ] && rm -f "$HF"
+  CODE="${CODE:-000}"
   say "免费容器: $BASE → HTTP $CODE"
   [ "$CODE" != "200" ] && { ALERT=1; MSGS="${MSGS}免费容器不可达(HTTP $CODE)；"; }
 else
@@ -96,7 +103,8 @@ PY
   if [ -n "$DKEY" ]; then
     B=""
     for _ in 1 2 3; do
-      B=$(curl -s -m 12 "$PAID_BALANCE_URL" -H "Authorization: Bearer $DKEY" 2>/dev/null)
+      HF=$(mk_header "$DKEY") && B=$(curl -s -m 12 "$PAID_BALANCE_URL" -H "@$HF" 2>/dev/null)
+      [ -n "${HF:-}" ] && rm -f "$HF"
       printf '%s' "$B" | grep -q total_balance && break
       sleep 2
     done

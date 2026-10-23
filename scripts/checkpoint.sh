@@ -13,10 +13,14 @@
 # 落盘位置：$WORKSPACE/state/checkpoint.md
 # ------------------------------------------------------------
 set -u
+umask 077   # 检查点含任务细节，只给属主读
 SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=../lib/ops_lib.sh
 . "$SELF_DIR/../lib/ops_lib.sh"
-ops_require_ws 2>/dev/null || true
+if [ -z "${WORKSPACE:-}" ]; then
+  echo "ERROR: 未配置 WORKSPACE（ops.conf 或环境变量，模板见 templates/ops.conf.example）" >&2
+  exit 2
+fi
 
 OUT="${WORKSPACE:-.}/state/checkpoint.md"
 mkdir -p "$(dirname "$OUT")" 2>/dev/null

@@ -1,4 +1,6 @@
 #!/bin/bash
+set -uo pipefail
+umask 077
 # log-fingerprint.sh — 日志报错指纹（归一化 + 脱敏 + 短哈希）
 # 读 stdin 每行日志 → 输出 "<fp10>\t<归一化样本(≤140字符)>"
 # 规范：时间/PID/路径/数字/十六进制归一；token/JWT/长blob 一律脱敏为 <REDACTED>/<JWT>/<BLOB>（不落明文密钥）。
