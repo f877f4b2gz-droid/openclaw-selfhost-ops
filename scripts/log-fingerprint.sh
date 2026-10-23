@@ -19,6 +19,13 @@ read -r -d '' PYCODE <<'PY'
 
 import hashlib, re, sys
 
+# 非 UTF-8 字节（二进制日志、GBK 输出、损坏文件）不得让进程崩溃：
+# 统一按 utf-8 解码，非法字节替换为 U+FFFD。
+try:
+    sys.stdin.reconfigure(encoding='utf-8', errors='replace')
+except AttributeError:
+    pass  # Python < 3.7
+
 RULES = [
     (re.compile(r'\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}[.,+\d:]*'), ''),      # 时间戳
     (re.compile(r'\b\d{2}:\d{2}:\d{2}(?:[.,]\d+)?'), ''),                      # 纯时间
@@ -41,6 +48,10 @@ def fingerprint(line: str) -> str:
         n = pat.sub(rep, n)
     n = CTRL.sub('', n)
     n = WS.sub(' ', n).strip()[:140]
+    # 二进制/乱码行：替换字符占比过高时归一为单一标记，
+    # 否则随机字节会每行产生一个新指纹，把报告淹没。
+    if n and n.count('\ufffd') > max(3, len(n) // 3):
+        return '<BINARY>'
     return n
 
 
