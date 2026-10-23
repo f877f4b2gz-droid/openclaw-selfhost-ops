@@ -9,6 +9,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow 
 
 - README: new section "两条环境级坑" covering cross-subvolume symlink file-handle failure (EBADF) and stale fuse mounts that still report a healthy process. Both feed directly into the log-noise and alerting lines of this repo.
 - README: `git clone` now uses the real repository URL instead of a placeholder.
+- docs: removed machine-specific file names, directory listings and business-specific examples from 信息资产管理规范 and 双机协作规范; mechanisms kept, examples generalized.
 
 ### Notes
 
