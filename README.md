@@ -61,7 +61,7 @@
 ## 60 秒上手
 
 ```bash
-git clone <this-repo> && cd openclaw-selfhost-ops
+git clone https://github.com/f877f4b2gz-droid/openclaw-selfhost-ops.git && cd openclaw-selfhost-ops
 
 # 1. 配置（唯一需要改的文件，且不入库）
 sudo install -Dm644 templates/ops.conf.example /etc/openclaw-ops/ops.conf
@@ -122,6 +122,32 @@ openclaw-selfhost-ops/
 | `docs/架构设计与复用体系.md` | 三层总纲与"上提门槛"设计 |
 | `docs/双机协作规范.md` | 编排端/执行端职责边界与脚本归宿 |
 | `docs/规范-*.md` | 文档 / 配置 / 备份 / 技能 / 记忆 / 日志 / 脱敏 各专项 |
+
+---
+
+## 三条踩过的坑（不在脚本里，写在这儿）
+
+机制之外，有些坑是环境本身给的。三条都是实测撞出来的，写下来省别人一次通宵。
+
+### 一、跨子卷软链会让文件句柄失效
+
+把 `/volA/xxx` 软链到 `/volB/yyy` 看着省事，但依赖 `name_to_handle_at` / `open_by_handle_at` 的访问统计类服务，跨子卷拿不到句柄，会持续报 `bad file number`（EBADF）。症状很迷惑：文件明明读得到，服务就是不停报错，重启服务也立刻复现。
+
+改用 `mount --bind`，路径不变、对应用透明、句柄正常。写进开机配置时带 `nofail`，挂不上也不影响启动。
+
+**排查要点**：先确认是不是真坏。`find <dir> -xtype l` 数一遍失效软链，是 0 就别再怀疑数据，问题在机制上。
+
+### 二、fuse 挂载断了，进程却还活着
+
+云存储类服务用 rclone/fuse 挂载时，后端掉线后挂载点会留在 `Transport endpoint is not connected` 状态，`ls` 直接报错，但服务进程状态显示正常。
+
+顺序固定：先 `umount -l` 懒卸载（普通 `umount` 会报 Invalid argument），再 `fusermount -uz`，然后重启挂载服务，挂载点会自动重建。**不要先删数据**——文件大概率都还在，只是通道断了。
+
+### 三、媒体库的「已缺失」标记不会自己回来
+
+挂载恢复后，索引数据库里的 `missing_at` 标记仍然留着，界面依旧把这批当不存在。需要显式清标记，清之前先抽验文件确实存在（抽 50 条全中再动），并且先备份库文件。
+
+顺序反了就是灾难：先删记录 → 后来发现文件都在 → 回不去了。
 
 ---
 

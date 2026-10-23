@@ -3,6 +3,17 @@
 All notable changes to this repository are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [2.1.1] - 2026-10-24
+
+### Added
+
+- README: new section "三条踩过的坑" covering cross-subvolume symlink file-handle failure (EBADF), stale fuse mount recovery order, and media-library `missing_at` flags that survive a remount.
+- README: `git clone` now uses the real repository URL instead of a placeholder.
+
+### Notes
+
+- No script changes. These are operational findings that belong to the environment, not to the code.
+
 ## [2.1.0] - 2026-10-23
 
 ### Added
