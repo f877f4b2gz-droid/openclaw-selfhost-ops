@@ -149,3 +149,35 @@ SCRATCH_ZERO_ROUNDS=2              # 连续 N 轮被引=0 才移入回收站
 
 # 经验队列（exp-scan.sh）：上限 50 条、待处理超 30 天标过期——逻辑内置。
 # 关闭通知推送：运行前设环境变量 EXP_NO_NOTIFY=1。
+
+# ---------- 模型费用守卫（model-guard.sh）----------
+# 免费容器 provider 名（openclaw.json 里 models.providers 的键）
+FREE_PROVIDER="free-models"
+# 付费兜底 provider 名（用于余额查询；留空 = 跳过余额检查）
+PAID_PROVIDER=""
+# 付费余额查询地址（DeepSeek 官方为例；其他厂商自行替换）
+PAID_BALANCE_URL=""
+# 余额告警下限（元）
+BALANCE_MIN=10
+# 24h 花费告警上限（元）
+DAILY_MIN=10
+
+# ---------- 每日巡检（inspect-daily.sh）----------
+# 需检查的挂载点（空格分隔，报告里按顺序出现）
+# 注意：本文件是空格分隔列表，所以路径本身不能含空格
+INSPECT_MOUNTS="/ /data"
+# SMART 巡检磁盘（空格分隔）
+SMART_DISKS="/dev/sda"
+# 关键 systemd 服务
+INSPECT_SERVICES="ssh docker"
+# 关键监听端口
+INSPECT_PORTS="22 443"
+# 关键进程（格式：匹配串:显示名，空格分隔）
+INSPECT_PROCS=""
+# 应用/容器白名单（手动停用的不告警）
+INSPECT_APP_IGNORE=""
+INSPECT_DOCKER_IGNORE=""
+# 推送命令（收件人由本机决定，不入库）
+# 只接受「可执行文件 + 空格分隔的参数」，不经过 shell 求值；
+# 收件人这类本机信息写在这里，不要写进仓库脚本
+INSPECT_NOTIFY_CMD=""

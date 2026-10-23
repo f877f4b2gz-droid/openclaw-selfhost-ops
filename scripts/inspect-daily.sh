@@ -1,0 +1,264 @@
+#!/bin/bash
+# ------------------------------------------------------------
+# inspect-daily.sh — 每日综合巡检（建议 cron 每天一次）
+#
+# 一次跑完九项，输出一段可直接推送的纯文本：
+#   磁盘 / SMART / 温度 / 负载 · 备份新鲜度 · 服务 · 端口 · 进程
+#   日志体检（报错指纹分类）· 大日志 Top3
+#
+# 核心设计：
+#   - 报错不按条数报，按「指纹」报：同一类错误只算一条，
+#     用 log-fingerprint.sh 归一化，用 log-error-kb.sh 记结论。
+#     于是报告里只剩三种：新N / 待人工N / 已忽略N。
+#   - 只扫系统日志 + 各应用 error.log，**不扫运维助手自身的日志**，
+#     否则会把自己每轮心跳产生的告警当成系统故障（实测能占一半噪声）。
+#   - 白名单：手动停用的应用/容器不告警。
+#
+# 用法：inspect-daily.sh [--dry]      --dry 只打印，不推送
+# 退出码：0 正常 / 1 有告警项
+#
+# 配置见 ops.conf：INSPECT_* 系列。
+# ------------------------------------------------------------
+set -uo pipefail
+SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck source=../lib/ops_lib.sh
+. "$SELF_DIR/../lib/ops_lib.sh"
+
+DRY=0
+[ "${1:-}" = "--dry" ] && DRY=1
+
+umask 077   # 报告与知识库可能含主机信息，默认只给属主读
+
+WS="${WORKSPACE:-$PWD}"
+KB_DIR="${KB_DIR:-$WS/knowledge/log-errors}"
+KB="$KB_DIR/kb.jsonl"; PEND="$KB_DIR/pending.tsv"
+mkdir -p "$KB_DIR" 2>/dev/null; touch "$KB" "$PEND" 2>/dev/null
+
+FP_BIN="$SELF_DIR/log-fingerprint.sh"
+KB_BIN="$SELF_DIR/log-error-kb.sh"
+
+MOUNTS="${INSPECT_MOUNTS:-/}"
+DISKS="${SMART_DISKS:-}"
+SERVICES="${INSPECT_SERVICES:-}"
+PORTS="${INSPECT_PORTS:-}"
+PROCS="${INSPECT_PROCS:-}"
+APP_IGNORE="${INSPECT_APP_IGNORE:-}"
+DOCKER_IGNORE="${INSPECT_DOCKER_IGNORE:-}"
+NOTIFY_CMD="${INSPECT_NOTIFY_CMD:-}"
+LOG_DIR="${LOG_DIR:-/var/log}"
+LOG_SCAN_DIRS="${LOG_SCAN_DIRS:-/var/log}"
+LOG_HOURS="${INSPECT_LOG_HOURS:-24}"
+
+# ---- 磁盘 ----
+DISK_OUT=""
+for m in $MOUNTS; do
+  v=$(df -h "$m" 2>/dev/null | awk 'NR==2{print $3"/"$2" ("$5")"}')
+  [ -z "$v" ] && v="挂载异常"
+  DISK_OUT="$DISK_OUT $m $v ｜"
+done
+DISK_OUT="${DISK_OUT% ｜}"
+
+# ---- 内存 / 负载 / 温度 ----
+MEM=$(free -h 2>/dev/null | awk '/^Mem:/{print $3"/"$2}')
+LOAD=$(awk '{print $1", "$2", "$3}' /proc/loadavg 2>/dev/null)
+TEMP=$(sensors 2>/dev/null | awk '/Package id 0:/{gsub(/[+°C]/,"",$4); print $4; exit}')
+[ -z "$TEMP" ] && TEMP="-"
+TEMP_WARN=""
+[ -n "$TEMP" ] && [ "$TEMP" != "-" ] && awk -v t="$TEMP" 'BEGIN{exit !(t>80)}' && TEMP_WARN="(偏高)"
+
+# ---- SMART ----
+SMART_BAD=""
+for d in $DISKS; do
+  [ -b "$d" ] || continue
+  h=$(sudo -n smartctl -H "$d" 2>/dev/null | grep -oE 'PASSED|FAILED!' | head -1)
+  [ "$h" = "FAILED!" ] && SMART_BAD="$SMART_BAD ${d##*/}"
+done
+[ -z "$SMART_BAD" ] && SMART_BAD="${DISKS:+全部PASSED}"
+
+# ---- 备份新鲜度（目录约定：$BACKUP_CHECK_DIR/YYYY-MM-DD）----
+TODAY=$(date +%F)
+BK_ST="-"
+if [ -n "${BACKUP_CHECK_DIR:-}" ]; then
+  [ -d "$BACKUP_CHECK_DIR/$TODAY" ] && BK_ST="今日已备" || BK_ST="⚠️ 今日未备份"
+fi
+
+# ---- 容器 ----
+DOCKER_BAD=""
+if command -v docker >/dev/null 2>&1; then
+  DOCKER_BAD=$(docker ps -a --format '{{.Names}}|{{.Status}}' 2>/dev/null | awk -F'|' -v ig="$DOCKER_IGNORE" '
+    BEGIN{n=split(ig,a," ");for(i=1;i<=n;i++)if(a[i]!="")skip[a[i]]=1}
+    $2 !~ /^(Up|Created|Restarting)/ && !($1 in skip){print $1}' | paste -sd, -)
+  [ -z "$DOCKER_BAD" ] && DOCKER_BAD="全部在线"
+fi
+
+# ---- 服务 ----
+SVC_BAD=""
+for s in $SERVICES; do
+  st=$(systemctl is-active "$s" 2>/dev/null)
+  [ "$st" != "active" ] && SVC_BAD="$SVC_BAD $s($st)"
+done
+[ -z "$SVC_BAD" ] && SVC_BAD="${SERVICES:+全部 active}"
+
+# ---- 端口 ----
+PORT_BAD=""
+for p in $PORTS; do
+  ss -tln 2>/dev/null | awk '{print $4}' | grep -qE ":$p$" || PORT_BAD="$PORT_BAD $p"
+done
+[ -z "$PORT_BAD" ] && PORT_BAD="${PORTS:+全部在听}"
+
+# ---- 进程（格式 匹配串:显示名）----
+PROC_BAD=""
+for spec in $PROCS; do
+  pat="${spec%%:*}"; name="${spec##*:}"
+  [ -z "$pat" ] && continue
+  pgrep -f "$pat" >/dev/null 2>&1 || PROC_BAD="$PROC_BAD $name"
+done
+[ -z "$PROC_BAD" ] && PROC_BAD="${PROCS:+全部在跑}"
+
+# ===== 日志体检 + 报错知识库 =====
+LOG_TOTAL=$(du -sh /var/log 2>/dev/null | awk '{print $1}')
+JOURNAL=$(journalctl --disk-usage 2>/dev/null | grep -oE '[0-9.]+ ?[KMGT]i?B?' | head -1)
+[ -z "$JOURNAL" ] && JOURNAL="-"
+
+RAW=$(mktemp); FPS=$(mktemp)
+# 扫描目录按空格拆成数组：避免未加引号变量被路径名通配符意外展开
+read -r -a SCAN_DIRS <<< "$LOG_SCAN_DIRS"
+mapfile -t APP_ERRS < <(find "${SCAN_DIRS[@]}" -name "error.log" -mmin -$((LOG_HOURS*60)) 2>/dev/null | while IFS= read -r f; do [ -r "$f" ] && printf '%s\n' "$f"; done)
+mapfile -t BIG_ERRS < <(find "${SCAN_DIRS[@]}" -name "error.log" -size +5M 2>/dev/null | while IFS= read -r f; do [ -r "$f" ] && printf '%s\n' "$f"; done)
+
+# 注意：这里刻意不包含运维助手自身的日志文件（INSPECT_SELF_LOGS 显式指定才会扫）
+for lf in /var/log/syslog /var/log/kern.log /var/log/auth.log /var/log/cron.log \
+          ${INSPECT_SELF_LOGS:-} "${APP_ERRS[@]}"; do
+  [ -f "$lf" ] || continue
+  [ -r "$lf" ] || continue
+  lab="${lf#/var/log/}"
+  tail -n 800 "$lf" 2>/dev/null \
+    | grep -aiE 'error|failed|failure|panic|critical|fatal|exception|traceback' \
+    | grep -avE 'sudo: .*COMMAND=|^\{' \
+    | while IFS= read -r l; do printf '%s\t%s\n' "$lab" "$l"; done >> "$RAW"
+done
+
+if [ -s "$RAW" ]; then
+  paste -d'\t' <(cut -f1 "$RAW") <(cut -f2- "$RAW" | "$FP_BIN") 2>/dev/null | sort -u -k2,2 > "$FPS"
+else
+  : > "$FPS"
+fi
+
+# 分类在单个 python 进程里完成：每次 spawn 子进程查一条指纹，
+# 500 条不同错误要 24 秒；批量后是毫秒级。
+CLASSIFY=$(python3 - "$FPS" "$KB" "$PEND" "$(date +%F)" <<'PY2'
+import json, sys
+fps_path, kb_path, pend_path, today = sys.argv[1:5]
+
+known = {}
+try:
+    with open(kb_path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            fp = row.get('fp')
+            if fp:
+                known[fp] = row.get('status') or 'new'
+except OSError:
+    pass
+
+seen_pending = set()
+try:
+    with open(pend_path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            parts = line.rstrip('\n').split('\t')
+            if parts and parts[0]:
+                seen_pending.add(parts[0])
+except OSError:
+    pass
+
+new_n = man_n = harm_n = 0
+samples = []
+to_append = []
+try:
+    rows = open(fps_path, encoding='utf-8', errors='replace').read().splitlines()
+except OSError:
+    rows = []
+
+for row in rows:
+    parts = row.split('\t')
+    if len(parts) < 2:
+        continue
+    src, fp = parts[0], parts[1]
+    sample = parts[2] if len(parts) > 2 else ''
+    st = known.get(fp, 'new')
+    if st == 'known-harmless':
+        harm_n += 1
+    elif st == 'known-manual':
+        man_n += 1
+    else:
+        new_n += 1
+        if len(samples) < 3:
+            samples.append(f'{src}:{sample[:70]}')
+        if fp not in seen_pending:
+            seen_pending.add(fp)
+            to_append.append('\t'.join([fp, src, sample[:120], today]))
+
+if to_append:
+    try:
+        with open(pend_path, 'a', encoding='utf-8') as f:
+            f.write('\n'.join(to_append) + '\n')
+    except OSError:
+        pass
+
+print(f'{new_n}|{man_n}|{harm_n}|' + (' '.join(samples) if samples else '无'))
+PY2
+)
+NEWN=${CLASSIFY%%|*}; REST=${CLASSIFY#*|}
+MANN=${REST%%|*}; REST=${REST#*|}
+HARMN=${REST%%|*}; NEWSAMP=" ${REST#*|}"
+rm -f "$RAW" "$FPS"
+
+BIG=$( { du -ah /var/log 2>/dev/null | grep -E '\.log$'; \
+         [ "${#BIG_ERRS[@]}" -gt 0 ] && printf '%s\n' "${BIG_ERRS[@]}" | xargs -r du -h 2>/dev/null; } \
+       | sort -u -k2,2 | sort -rh | head -3 \
+       | awk '{gsub("/var/log/","",$2); printf "%s(%s) ", $2, $1}')
+[ -z "$BIG" ] && BIG="-"
+
+OUT="【每日巡检 $(date +%F)】
+磁盘:$DISK_OUT
+SMART: ${SMART_BAD:--} ｜ 温度: ${TEMP}°C$TEMP_WARN
+内存+负载: $MEM, load $LOAD
+备份: $BK_ST
+容器异常: ${DOCKER_BAD:--}
+服务异常:$SVC_BAD
+端口未听:$PORT_BAD
+进程缺失:$PROC_BAD
+日志总量: $LOG_TOTAL / journald $JOURNAL
+报错分类: 新${NEWN} / 待人工${MANN} / 已忽略${HARMN}
+新报错:$NEWSAMP
+大日志: $BIG"
+
+# 退出码语义：有任何异常项 → 1，便于包装脚本/监控直接判断
+ALERT=0
+for v in "$DOCKER_BAD" "$SVC_BAD" "$PORT_BAD" "$PROC_BAD"; do
+  case "$v" in ""|全部*) ;; *) ALERT=1 ;; esac
+done
+[ "$NEWN" -gt 0 ] && ALERT=1
+case "$BK_ST" in *未备份*) ALERT=1 ;; esac
+[ -n "$TEMP_WARN" ] && ALERT=1
+
+if [ "$DRY" = "1" ] || [ -z "$NOTIFY_CMD" ]; then
+  printf '%s\n' "$OUT"
+  [ -z "$NOTIFY_CMD" ] && echo "（未配置 INSPECT_NOTIFY_CMD，仅打印不推送）" >&2
+  exit "$ALERT"
+fi
+
+# 推送命令只接受「可执行文件路径 + 参数」，不经过 shell 求值：
+# 配置里写 eval 等于把配置文件提升为代码，一旦配置被改就是任意命令执行。
+read -r -a NOTIFY_ARGV <<< "$NOTIFY_CMD"
+if [ ! -x "${NOTIFY_ARGV[0]}" ]; then
+  echo "INSPECT_NOTIFY_CMD 不是可执行文件：${NOTIFY_ARGV[0]}" >&2
+  printf '%s\n' "$OUT"
+  exit 0
+fi
+mkdir -p "$LOG_DIR" 2>/dev/null
+printf '%s' "$OUT" | "${NOTIFY_ARGV[@]}" >>"$LOG_DIR/inspect-daily.log" 2>&1
+exit "$ALERT"

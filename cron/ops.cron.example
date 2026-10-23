@@ -35,3 +35,15 @@ PATH=/usr/local/bin:/usr/bin:/bin
 #   1) backup-sweep.sh 不带 --apply 时只预览，不会删任何东西。
 #   2) 清理类任务的日志重定向别省 —— 体检脚本会检查"清理任务有没有日志"；
 #      没日志的清理一旦出错就无从追溯，会直接报异常。
+
+# ---------- 巡检与费用守卫（v2.1 新增）----------
+# 每日 09:00  综合巡检（磁盘/SMART/温度/服务/端口/进程/日志指纹）
+#             报告只推「新N/待人工N/已忽略N」，噪声可控
+0 9 * * *    root  OPS_CONF=/etc/openclaw-ops/ops.conf /path/to/openclaw-selfhost-ops/scripts/inspect-daily.sh
+
+# 每小时   模型费用守卫（免费通道是否在用 + 余额 + 24h 花费）
+#          不要设成每 5 分钟：告警冷却按小时级设计，跑太勤只会制造重复推送
+0 * * * *    root  OPS_CONF=/etc/openclaw-ops/ops.conf /path/to/openclaw-selfhost-ops/scripts/model-guard.sh --notify
+
+# 会话检查点由助手自己在「切模型 / 压缩 / 重置」前调用，不需要定时：
+#   ./scripts/checkpoint.sh "已完成什么" "正在做什么" "下一步要做什么"
