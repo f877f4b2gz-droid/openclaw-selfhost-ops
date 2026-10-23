@@ -3,6 +3,13 @@
 All notable changes to this repository are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [2.2.1] - 2026-10-24
+
+### Changed
+
+- README restructured around a decision path instead of a feature list: a one-line hook, a "30 seconds: is this for you" section, a before/after table with measured numbers (53 noisy errors → 11 needing attention; self-generated false positives 40% → 0), then the four governance layers. Repository layout and the adaptation pointer moved closer to the top.
+- No script or spec changes.
+
 ## [2.2.0] - 2026-10-24
 
 ### Added
