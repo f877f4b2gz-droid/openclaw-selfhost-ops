@@ -3,6 +3,17 @@
 All notable changes to this repository are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow [SemVer](https://semver.org/).
 
+## [2.2.0] - 2026-10-24
+
+### Added
+
+- `ADAPT.md` — an adaptation sheet addressed to AI agents rather than humans. It lists the six environment facts this repo assumes (data root, logs, sessions, media, config file, alert command), how to probe each one, which files to change, which scripts must not be touched, and a reference table of known layouts for other agent runtimes.
+- README (both languages): a pointer to `ADAPT.md` so non-OpenClaw users know the repo is adaptable without a fork.
+
+### Rationale
+
+Instead of maintaining per-runtime adapters, the repo ships instructions that let each user's own agent perform the adaptation. Zero maintenance, no runtime matrix, and the scripts stay unchanged.
+
 ## [2.1.1] - 2026-10-24
 
 ### Added

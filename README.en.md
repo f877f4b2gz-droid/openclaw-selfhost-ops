@@ -15,6 +15,8 @@ Plain bash scripts plus written specs, distilled from a multi-agent production s
 
 *Note: the `docs/` specs are written in Chinese; this file is the English overview.*
 
+**Not running OpenClaw?** Hand the repo to your AI and point it at [`ADAPT.md`](ADAPT.md) — an adaptation sheet written for agents rather than humans: probe the environment, fill in six variables, run.
+
 ---
 
 ## Do these symptoms look familiar
