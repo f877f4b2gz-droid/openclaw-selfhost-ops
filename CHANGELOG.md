@@ -7,7 +7,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow 
 
 ### Added
 
-- README: new section "三条踩过的坑" covering cross-subvolume symlink file-handle failure (EBADF), stale fuse mount recovery order, and media-library `missing_at` flags that survive a remount.
+- README: new section "两条环境级坑" covering cross-subvolume symlink file-handle failure (EBADF) and stale fuse mounts that still report a healthy process. Both feed directly into the log-noise and alerting lines of this repo.
 - README: `git clone` now uses the real repository URL instead of a placeholder.
 
 ### Notes
