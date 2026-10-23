@@ -71,7 +71,7 @@ There is a hidden trap, documented in `docs/巡检.md`: **the check must not sca
 ## 60-second start
 
 ```bash
-git clone <this-repo> && cd openclaw-selfhost-ops
+git clone https://github.com/f877f4b2gz-droid/openclaw-selfhost-ops.git && cd openclaw-selfhost-ops
 
 # 1. Configure (the only file you edit, and it never enters the repo)
 sudo install -Dm644 templates/ops.conf.example /etc/openclaw-ops/ops.conf
