@@ -33,6 +33,7 @@ if [ -z "${WORKSPACE:-}" ]; then
 fi
 
 DIR="${KB_DIR:-$WORKSPACE/knowledge/log-errors}"
+LOCK="$DIR/.kb.lock"
 # 知识库是纯文本写入目标：防止被替换成软链后顺着写到别处
 for target in kb.jsonl pending.tsv; do
   if [ -L "$DIR/$target" ]; then
@@ -102,8 +103,18 @@ PY
       known-harmless|known-manual|new) ;;
       *) echo "未知状态：$status（只允许 known-harmless / known-manual / new）" >&2; exit 2 ;;
     esac
+    # 串行化：add 是「读全量 → 改 → 写回」，并发时会互相覆盖
+    # flock 可用则用内核锁；没有就退化成 mkdir 原子锁
+    if command -v flock >/dev/null 2>&1; then
+      exec 9>"$LOCK"
+      flock 9
+      release_lock(){ flock -u 9; }
+    else
+      while ! mkdir "$LOCK.d" 2>/dev/null; do sleep 0.05; done
+      release_lock(){ rmdir "$LOCK.d"; }
+    fi
     python3 - "$KB" "$fp" "$src" "$sample" "$status" "$cause" "$impact" "$action" "$ref" "$conf" <<'PY'
-import json, sys, datetime
+import json, os, sys, datetime
 kb, fp, src, sample, status, cause, impact, action, ref, conf = sys.argv[1:11]
 
 rows = {}
@@ -132,11 +143,14 @@ rows = {
     'ref': ref, 'conf': conf,
     'review': (today + datetime.timedelta(days=180)).isoformat(),
 }
-with open(kb, 'w', encoding='utf-8') as f:
+tmp = kb + '.tmp'
+with open(tmp, 'w', encoding='utf-8') as f:
     for line in kept:
         f.write(line + '\n')
     f.write(json.dumps(rows, ensure_ascii=False) + '\n')
+os.replace(tmp, kb)      # 原子替换：读者要么看旧全量，要么看新全量
 PY
+    release_lock
     # 有结论的指纹从待研究清单里摘掉，避免 pending 只增不减
     if [ "$status" != "new" ] && [ -f "$PEND" ]; then
       tmp2=$(mktemp)

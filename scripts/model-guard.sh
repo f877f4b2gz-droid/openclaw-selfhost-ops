@@ -41,6 +41,13 @@ DAILY_MIN="${DAILY_MIN:-10}"
 
 [ -r "$CFG" ] || { echo "读不到配置：$CFG" >&2; exit 2; }
 
+# 配置无法解析时必须立刻停：否则下游会拿空值继续判断，
+# 报出「主模型已不在免费容器（现: ）」这种误导性结论
+if ! python3 -c "import json,sys;json.load(open(sys.argv[1]))" "$CFG" 2>/dev/null; then
+  echo "配置无法解析（JSON 语法错误）：$CFG" >&2
+  exit 2
+fi
+
 ALERT=0; MSGS=""
 say(){ printf '%s\n' "$*"; }
 

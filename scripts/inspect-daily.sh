@@ -144,23 +144,77 @@ else
   : > "$FPS"
 fi
 
-NEWN=0; MANN=0; HARMN=0; NEWSAMP=""
-while IFS=$'\t' read -r src fp sample; do
-  [ -z "${fp:-}" ] && continue
-  st=$("$KB_BIN" status "$fp")
-  case "$st" in
-    known-harmless) HARMN=$((HARMN+1)) ;;
-    known-manual)   MANN=$((MANN+1)) ;;
-    *)
-      NEWN=$((NEWN+1))
-      [ "$NEWN" -le 3 ] && NEWSAMP="$NEWSAMP ${src}:$(printf '%s' "$sample" | cut -c1-70)"
-      grep -qF "$fp" "$PEND" 2>/dev/null || \
-        printf '%s\t%s\t%s\t%s\n' "$fp" "$src" "$(printf '%s' "$sample" | cut -c1-120)" "$(date +%F)" >> "$PEND"
-      ;;
-  esac
-done < "$FPS"
+# 分类在单个 python 进程里完成：每次 spawn 子进程查一条指纹，
+# 500 条不同错误要 24 秒；批量后是毫秒级。
+CLASSIFY=$(python3 - "$FPS" "$KB" "$PEND" "$(date +%F)" <<'PY2'
+import json, sys
+fps_path, kb_path, pend_path, today = sys.argv[1:5]
+
+known = {}
+try:
+    with open(kb_path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            try:
+                row = json.loads(line)
+            except Exception:
+                continue
+            fp = row.get('fp')
+            if fp:
+                known[fp] = row.get('status') or 'new'
+except OSError:
+    pass
+
+seen_pending = set()
+try:
+    with open(pend_path, encoding='utf-8', errors='replace') as f:
+        for line in f:
+            parts = line.rstrip('\n').split('\t')
+            if parts and parts[0]:
+                seen_pending.add(parts[0])
+except OSError:
+    pass
+
+new_n = man_n = harm_n = 0
+samples = []
+to_append = []
+try:
+    rows = open(fps_path, encoding='utf-8', errors='replace').read().splitlines()
+except OSError:
+    rows = []
+
+for row in rows:
+    parts = row.split('\t')
+    if len(parts) < 2:
+        continue
+    src, fp = parts[0], parts[1]
+    sample = parts[2] if len(parts) > 2 else ''
+    st = known.get(fp, 'new')
+    if st == 'known-harmless':
+        harm_n += 1
+    elif st == 'known-manual':
+        man_n += 1
+    else:
+        new_n += 1
+        if len(samples) < 3:
+            samples.append(f'{src}:{sample[:70]}')
+        if fp not in seen_pending:
+            seen_pending.add(fp)
+            to_append.append('\t'.join([fp, src, sample[:120], today]))
+
+if to_append:
+    try:
+        with open(pend_path, 'a', encoding='utf-8') as f:
+            f.write('\n'.join(to_append) + '\n')
+    except OSError:
+        pass
+
+print(f'{new_n}|{man_n}|{harm_n}|' + (' '.join(samples) if samples else '无'))
+PY2
+)
+NEWN=${CLASSIFY%%|*}; REST=${CLASSIFY#*|}
+MANN=${REST%%|*}; REST=${REST#*|}
+HARMN=${REST%%|*}; NEWSAMP=" ${REST#*|}"
 rm -f "$RAW" "$FPS"
-[ -z "$NEWSAMP" ] && NEWSAMP=" 无"
 
 BIG=$( { du -ah /var/log 2>/dev/null | grep -E '\.log$'; \
          [ "${#BIG_ERRS[@]}" -gt 0 ] && printf '%s\n' "${BIG_ERRS[@]}" | xargs -r du -h 2>/dev/null; } \

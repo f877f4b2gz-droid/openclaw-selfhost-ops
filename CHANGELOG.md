@@ -23,6 +23,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/); versions follow 
 ### Performance
 
 - `log-fingerprint.sh` rewritten as a single python3 process. Per-line `md5sum` spawning took 5.7 s per 1,000 lines; the current version takes 57 ms.
+- Fingerprint classification in `inspect-daily.sh` batched into one process. Spawning a lookup per fingerprint took 24 s for 500 distinct errors; the batch path takes 222 ms.
+
+### Fixed
+
+- Concurrent `log-error-kb.sh add` lost entries: read-modify-write is now serialized with `flock` and committed via `os.replace`, so 20 parallel writers keep all 20 rows.
+- `model-guard.sh` refused to start on unparsable config instead of reporting a misleading "not on free tier" result.
+- Symlinked knowledge-base files are rejected before writing.
+- Invalid `--status` values are rejected instead of silently making registered errors look new again.
 
 ### Notes
 

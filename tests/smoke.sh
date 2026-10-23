@@ -64,12 +64,20 @@ fp=$(printf '2026-10-23T10:00:00 level=error msg="db down"\n' | "$ROOT/scripts/l
 out2=$("$ROOT/scripts/inspect-daily.sh" --dry 2>/dev/null)
 printf '%s' "$out2" | grep -q "报错分类: 新0" && ok "已登记后不再算新" || no "已登记后不再算新"
 
-echo "== 5. 非法输入 =="
+echo "== 5. 并发写入 =="
+KB="$TMP/ws/knowledge/log-errors/kb.jsonl"
+rm -f "$KB"
+for i in $(seq 1 10); do "$ROOT/scripts/log-error-kb.sh" add --fp "p$i" --src a.log --status known-harmless >/dev/null 2>&1 & done
+wait
+n=$(wc -l < "$KB")
+[ "$n" = "10" ] && ok "10 并发登记无丢失" || no "10 并发登记无丢失（实际 $n）"
+
+echo "== 6. 非法输入 =="
 "$ROOT/scripts/log-error-kb.sh" add --fp f9 --src a.log --status known-harless >/dev/null 2>&1
 [ $? -eq 2 ] && ok "状态写错被拒（退出码 2）" || no "状态写错被拒"
 "$ROOT/scripts/log-error-kb.sh" status f9 | grep -q '^new$' && ok "非法状态不入库" || no "非法状态不入库"
 
-echo "== 6. 缺配置的报错 =="
+echo "== 7. 缺配置的报错 =="
 env -u WORKSPACE OPS_CONF=/nonexistent "$ROOT/scripts/checkpoint.sh" >/dev/null 2>&1
 [ $? -eq 2 ] && ok "配置缺失退出码 2" || no "配置缺失退出码 2"
 
