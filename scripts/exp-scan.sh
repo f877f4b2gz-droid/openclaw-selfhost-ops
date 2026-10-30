@@ -37,7 +37,7 @@ QUEUE=os.environ['QUEUE']; ARCHIVE=os.environ['ARCHIVE']; SD=os.environ['STATE_D
 import datetime
 TODAY=datetime.date.today().isoformat()
 
-# ---- 1. 读取三源 ----
+# ---- 1. 读取候选来源 ----
 items=[]  # (来源, 文本)
 p=os.path.join(WS,'docs','经验库.md')
 if os.path.exists(p):
@@ -54,6 +54,27 @@ if os.path.exists(p):
                 if stack.get('现象'): items.append(("docs/踩坑总表.md",stack['现象']))
                 stack={'现象':m.group(2).strip()}
     if stack.get('现象'): items.append(("docs/踩坑总表.md",stack['现象']))
+# PC/远端回传暂存区：执行端只 append，本机只读。
+# 格式约定：`## <标题>` 分段，段内 `- 坑：` / `- 解法：` 各一行；跳过模板占位符。
+p=os.path.join(WS,'scan','inbox_pc.md')
+if os.path.exists(p):
+    cur=None; ku=''; je=''; in_fence=False
+    def _flush():
+        if cur is not None and (ku or je):
+            txt=(cur+(('｜坑：'+ku) if ku else '')+(('｜解法：'+je) if je else '')).strip()
+            if ku not in ('...','…') and je not in ('...','…') and len(txt)>=8:
+                items.append(("scan/inbox_pc.md",txt))
+    for line in open(p,encoding='utf-8'):
+        if line.lstrip().startswith('```'):
+            in_fence = not in_fence; continue
+        if in_fence: continue
+        if line.startswith('## '):
+            _flush(); cur=line[3:].strip(); ku=''; je=''
+        elif line.strip().startswith('- 坑：'):
+            ku=line.split('：',1)[1].strip()
+        elif line.strip().startswith('- 解法：'):
+            je=line.split('：',1)[1].strip()
+    _flush()
 p=os.path.join(WS,'knowledge','log-errors','kb.jsonl')
 if os.path.exists(p):
     for line in open(p,encoding='utf-8'):
